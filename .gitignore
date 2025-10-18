@@ -1,0 +1,30 @@
+# Ignore image datasets
+*.jpeg
+*.jpg
+*.png
+
+# Ignore Jupyter notebook checkpoints
+**/.ipynb_checkpoints/
+
+# Ignore macOS metadata
+.DS_Store
+
+# Ignore VSCode settings
+.vscode/
+
+# Ignore Python cache and build files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+build/
+dist/
+*.egg-info/
+
+# Ignore model weights
+*.pt
+*.pth
+
+# Ignore virtual environments
+venv/
+.env/
