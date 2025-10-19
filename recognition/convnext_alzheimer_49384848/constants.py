@@ -15,6 +15,6 @@ BATCH_SIZE = 16
 EPOCHS     = 5
 LR         = 1e-4
 
-DATA_ROOT  = './AD_NC'
+DATA_ROOT = './recognition/convnext_alzheimer_49384848/AD_NC'
 
 NUM_CLASSES   = 2
