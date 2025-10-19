@@ -10,7 +10,7 @@ from torch.utils.data import Dataset, DataLoader, random_split
 from torchvision import transforms
 from PIL import Image
 
-from constants import IMAGE_SIZE, CLASSES, MEAN, STD, IMG_EXTS
+from constants import IMAGE_SIZE, CLASSES, MEAN, STD, IMG_EXTS, NUM_WORKER
 
 class MRIDataset2D(Dataset):
     """MRI 2D JPEG slice dataset for Alzheimer’s classification (AD vs NC)."""
@@ -65,7 +65,7 @@ def get_loaders(data_root, batch_size=16, val_fraction=0.1, seed=42):
         transforms.Normalize(MEAN,STD)
     ])
     val_tf = transforms.Compose([
-        transforms.Resize(256),
+        transforms.Resize(IMAGE_SIZE * 1.15),
         transforms.CenterCrop(IMAGE_SIZE),
         transforms.ToTensor(),
         transforms.Normalize(MEAN,STD)
@@ -73,7 +73,7 @@ def get_loaders(data_root, batch_size=16, val_fraction=0.1, seed=42):
 
     # Load full training dataset
     train_root = os.path.join(data_root, 'train')
-    full_train = MRIDataset2D(train_root, CLASSES, train_tf)
+    full_train = MRIDataset2D(train_root, CLASSES, transform=train_tf)
 
     # Split into train / val
     n_total = len(full_train)
@@ -90,12 +90,12 @@ def get_loaders(data_root, batch_size=16, val_fraction=0.1, seed=42):
     if not os.path.isdir(test_root):
         # fallback if test folder missing
         test_root = train_root
-    test_ds = MRIDataset2D(test_root, CLASSES, val_tf)
+    test_ds = MRIDataset2D(test_root, CLASSES, transform=val_tf)
 
     # Create DataLoaders
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  num_workers=2, pin_memory=True)
-    val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False, num_workers=2, pin_memory=True)
-    test_loader  = DataLoader(test_ds,  batch_size=batch_size, shuffle=False, num_workers=2, pin_memory=True)
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  num_workers=NUM_WORKER, pin_memory=True)
+    val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False, num_workers=NUM_WORKER, pin_memory=True)
+    test_loader  = DataLoader(test_ds,  batch_size=batch_size, shuffle=False, num_workers=NUM_WORKER, pin_memory=True)
 
     return train_loader, val_loader, test_loader
 
