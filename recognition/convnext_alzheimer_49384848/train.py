@@ -41,15 +41,28 @@ def main():
         f"Test images:  {len(test_loader.dataset)}")
 
     # Model setup
-    weights = ConvNeXt_Tiny_Weights.IMAGENET1K_V1
+    weights = ConvNeXt_Tiny_Weights.IMAGENET1K_V1   #add
     model   = convnext_tiny(weights=weights, drop_path_rate  = DROP_PATH_RATE)
+    
     num_features    = model.classifier[2].in_features
     model.classifier[2] = nn.Linear(num_features, NUM_CLASSES)
     model = model.to(DEVICE)
 
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(label_smoothing = 0.1) #add
     optimizer = optim.AdamW(model.parameters(), lr=LR, weight_decay=1e-4)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS)
+    from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR
+
+    # Warm-up for first 1 epoch (or 5% of total epochs)
+    warmup_scheduler = LinearLR(optimizer, start_factor=0.1, total_iters=1)
+    cosine_scheduler = CosineAnnealingLR(optimizer, T_max=EPOCHS - 1)
+
+    scheduler = SequentialLR(
+        optimizer,
+        schedulers=[warmup_scheduler, cosine_scheduler],
+        milestones=[1]
+    )
+    
+    
 
     # (Continue with training loop…)
     best_val_acc = 0.0
@@ -67,7 +80,8 @@ def main():
             optimizer.zero_grad()             # reset gradients
             outputs = model(inputs)           # forward pass
             loss = criterion(outputs, labels) # compute loss
-            loss.backward()                   # backpropagation
+            loss.backward()                   # backpropagation 
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)    #add
             optimizer.step()                  # update weights
             running_loss += loss.item()
             _, predicted = outputs.max(1)
@@ -135,6 +149,20 @@ def main():
     plt.savefig('training_curves.png', dpi=150)
     plt.show()
     print('📊 Training curves saved as training_curves.png')
+    
+    model.load_state_dict(torch.load('best_model.pth'))
+    model.eval()
+    test_correct, test_total = 0, 0
+    with torch.no_grad():
+        for inputs, labels in test_loader:
+            inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+            outputs = model(inputs)
+            _, predicted = outputs.max(1)
+            test_total += labels.size(0)
+            test_correct += predicted.eq(labels).sum().item()
+
+    test_acc = 100 * test_correct / test_total
+    print(f"🧠 Final Test Accuracy: {test_acc:.2f}%")
 
 
 if __name__ == '__main__':

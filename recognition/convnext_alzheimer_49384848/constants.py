@@ -5,7 +5,7 @@ IMG_EXTS = ('.png', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff')
 MEAN = [0.485, 0.456, 0.406]
 STD  = [0.229, 0.224, 0.225]
 
-NUM_WORKER = 2
+NUM_WORKER = os.cpu_count() // 2
 
 # Device settings
 DEVICE_MPS = 'mps'

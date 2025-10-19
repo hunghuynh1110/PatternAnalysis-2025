@@ -10,7 +10,9 @@ from torch.utils.data import Dataset, DataLoader, random_split
 from torchvision import transforms
 from PIL import Image
 
-from constants import IMAGE_SIZE, CLASSES, MEAN, STD, IMG_EXTS, NUM_WORKER
+from constants import IMAGE_SIZE, CLASSES, MEAN, STD, IMG_EXTS
+
+NUM_WORKER = os.cpu_count() // 2
 
 class MRIDataset2D(Dataset):
     """MRI 2D JPEG slice dataset for Alzheimer’s classification (AD vs NC)."""
