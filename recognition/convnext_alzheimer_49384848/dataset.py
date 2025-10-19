@@ -65,7 +65,7 @@ def get_loaders(data_root, batch_size=16, val_fraction=0.1, seed=42):
         transforms.Normalize(MEAN,STD)
     ])
     val_tf = transforms.Compose([
-        transforms.Resize(IMAGE_SIZE * 1.15),
+        transforms.Resize(256),
         transforms.CenterCrop(IMAGE_SIZE),
         transforms.ToTensor(),
         transforms.Normalize(MEAN,STD)
