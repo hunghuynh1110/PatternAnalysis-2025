@@ -10,8 +10,7 @@ from torch.utils.data import Dataset, DataLoader, random_split
 from torchvision import transforms
 from PIL import Image
 
-IMAGE_SIZE = 224
-CLASSES = ['AD', 'NC']
+from constants import IMAGE_SIZE, CLASSES, MEAN, STD, IMG_EXTS
 
 class MRIDataset2D(Dataset):
     """MRI 2D JPEG slice dataset for Alzheimer’s classification (AD vs NC)."""
@@ -21,7 +20,7 @@ class MRIDataset2D(Dataset):
         self.transform = transform
         self.samples = []
 
-        img_exts = ('.png', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff')
+        img_exts = IMG_EXTS
 
         for c in classes:
             class_dir = os.path.join(root_dir, c)
@@ -46,8 +45,7 @@ class MRIDataset2D(Dataset):
             img = transforms.Compose([
                 transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
                 transforms.ToTensor(),
-                transforms.Normalize([0.485, 0.456, 0.406],
-                     [0.229, 0.224, 0.225])
+                transforms.Normalize(MEAN,STD)
             ])(img)
         return img, label
 
@@ -60,19 +58,17 @@ def get_loaders(data_root, batch_size=16, val_fraction=0.1, seed=42):
 
     # Define transforms
     train_tf = transforms.Compose([
-        transforms.RandomResizedCrop(224, scale=(0.8, 1.0)),
+        transforms.RandomResizedCrop(IMAGE_SIZE, scale=(0.8, 1.0)),
         transforms.RandomHorizontalFlip(),
         transforms.RandomRotation(10),
         transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406],
-                             [0.229, 0.224, 0.225])
+        transforms.Normalize(MEAN,STD)
     ])
     val_tf = transforms.Compose([
         transforms.Resize(256),
-        transforms.CenterCrop(224),
+        transforms.CenterCrop(IMAGE_SIZE),
         transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406],
-                             [0.229, 0.224, 0.225])
+        transforms.Normalize(MEAN,STD)
     ])
 
     # Load full training dataset
@@ -91,6 +87,9 @@ def get_loaders(data_root, batch_size=16, val_fraction=0.1, seed=42):
 
     # Load test dataset
     test_root = os.path.join(data_root, 'test')
+    if not os.path.isdir(test_root):
+        # fallback if test folder missing
+        test_root = train_root
     test_ds = MRIDataset2D(test_root, CLASSES, val_tf)
 
     # Create DataLoaders
