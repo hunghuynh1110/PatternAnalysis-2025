@@ -31,7 +31,7 @@ class ConvNeXtBlock(nn.Module):
         dim: int,
         mlp_ratio: float = 4.0,
         drop_path: float = 0.0,
-        layer_scale_init: Optional[float] = 1e-6,
+        layer_scale_init: Optional[float] = 1e-5,
         norm_type: Literal["ln","bn"] = "ln"
     ):
         super().__init__()
@@ -137,8 +137,8 @@ class ConvNeXtStage(nn.Module):
         return self.blocks(x)
 
 class ConvNeXtMRI(nn.Module):
-    def __init__(self, in_chans=3, num_classes=2, depths=[2,2,4,2],
-                 dims=[48,96,192,384],
+    def __init__(self, in_chans=3, num_classes=2, depths=[3,3,6,3],
+                 dims=[64, 128, 256, 512],
                  drop_path_rate=0.25,
                  norm_type: Literal["ln","bn"] = "ln"):
         super().__init__()
