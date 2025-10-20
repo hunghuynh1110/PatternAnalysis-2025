@@ -81,6 +81,8 @@ elif torch.cuda.is_available():
 else:
     DEVICE = DEVICE_CPU
 
+from sklearn.metrics import roc_auc_score
+
 print("Current working directory:", os.getcwd())
 print(f"Using device: {DEVICE}")
 
@@ -93,11 +95,13 @@ print(f"Train images: {len(train_loader.dataset)} | "
     f"Val images:   {len(val_loader.dataset)} | "
     f"Test images:  {len(test_loader.dataset)}")
 # Model setup
-weights = ConvNeXt_Tiny_Weights.IMAGENET1K_V1
-model   = convnext_tiny(weights=weights, drop_path_rate  = DROP_PATH_RATE)
-num_features    = model.classifier[2].in_features
-model.classifier[2] = nn.Linear(num_features, NUM_CLASSES)
-model = model.to(DEVICE)
+model = ConvNeXtMRI(
+    in_chans=3,
+    num_classes=NUM_CLASSES,
+    depths=[2, 2, 4, 2],
+    dims=[48, 96, 192, 384],
+    drop_path_rate=DROP_PATH_RATE
+).to(DEVICE)
 
 class_weights = torch.tensor([1.1, 0.9], dtype=torch.float32).to(DEVICE)
 criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=0.05)
@@ -190,6 +194,44 @@ for epoch in range(1, EPOCHS + 1):
     val_f1 = f1_score(val_labels_np, val_preds, average='macro')
 
     print(f"Val Precision: {val_precision:.3f}, Recall: {val_recall:.3f}, F1: {val_f1:.3f}")
+
+
+
+    # === 🧪 Test Evaluation (no learning, just monitoring) ===
+    from sklearn.metrics import roc_auc_score
+
+    model.eval()
+    all_probs, all_labels = [], []
+    test_correct, test_total = 0, 0
+
+    with torch.no_grad():
+        for inputs, labels in test_loader:
+            inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+            outputs = model(inputs)
+            probs = torch.softmax(outputs, dim=1)[:, 1]  # Probability of class NC
+            _, predicted = outputs.max(1)
+            test_total += labels.size(0)
+            test_correct += predicted.eq(labels).sum().item()
+
+            all_probs.extend(probs.cpu().numpy())
+            all_labels.extend(labels.cpu().numpy())
+
+    # Compute metrics
+    test_acc = 100 * test_correct / test_total
+    test_auc = roc_auc_score(all_labels, all_probs)
+
+    print(f"🧠 [TEST] Epoch {epoch}: Acc={test_acc:.2f}%, AUC={test_auc:.3f}")
+
+    # Log results
+    with open('training_log.txt', 'a') as f:
+        f.write(f"[TEST] Epoch {epoch}: Acc={test_acc:.2f}%, AUC={test_auc:.3f}\n")
+
+    # # Optional: Stop training early if test AUC ≥ 0.8
+    # if test_auc >= 0.8:
+    #     print(f"🎯 Early stop! Test AUC={test_auc:.3f} ≥ 0.8")
+    #     break
+
+
 
     # --- OPTIONAL: Validation threshold tuning ---
     if epoch % 5 == 0 or epoch == EPOCHS:
