@@ -16,6 +16,8 @@ def drop_path(x, drop_prob: float = 0., training: bool = False):
     return x.div(keep_prob) * random_tensor
 
 
+
+
 class DropPath(nn.Module):
     def __init__(self, drop_prob: float = 0.):
         super().__init__()
@@ -206,6 +208,16 @@ class ConvNeXtMRI(nn.Module):
         x = self.head(x)
         return x
         
+    # --- Utility: Freeze early stages ---
+    def freeze_stages(self, n=1):
+        """
+        Freeze the first n stages (non-trainable).
+        Useful for staged training stability.
+        """
+        for i in range(n):
+            for param in self.stages[i].parameters():
+                param.requires_grad = False
+        print(f"🔒 Froze first {n} stage(s)")
         
         
         
