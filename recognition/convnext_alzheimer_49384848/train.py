@@ -63,6 +63,8 @@ from torchvision.models import convnext_tiny, ConvNeXt_Tiny_Weights
 from modules import ConvNeXtMRI
 import matplotlib.pyplot as plt
 
+from torch_ema import ExponentialMovingAverage
+
 torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.deterministic = False
 
@@ -113,6 +115,10 @@ model.freeze_stages(n=2)
 criterion = nn.CrossEntropyLoss(label_smoothing=0.075)
 optimizer = optim.AdamW(model.parameters(), lr=LR, weight_decay=WD)
 
+use_ema = True
+if use_ema:
+    ema_decay = 0.9995  # tuned for ~20k samples
+    model_ema = ExponentialMovingAverage(model.parameters(), decay=ema_decay)
 
 from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR
 
@@ -175,6 +181,9 @@ for epoch in range(1, EPOCHS + 1):
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         scaler.step(optimizer)
         scaler.update()
+        
+        if use_ema:
+            model_ema.update()
 
         running_loss += loss.item()
         _, predicted = outputs.max(1)
@@ -186,29 +195,45 @@ for epoch in range(1, EPOCHS + 1):
     train_loss = running_loss / len(train_loader)
     train_acc  = 100 * correct / total
 
-    # === Validation ===
-    model.eval()
-    val_loss = 0.0
-    val_correct = 0
-    val_total = 0
-    val_preds, val_labels_np = [], []
 
-    with torch.no_grad():
-        for inputs, labels in val_loader:
-            inputs = inputs.to(DEVICE)
-            labels = labels.to(DEVICE)
-            with torch.amp.autocast('cuda', enabled=torch.cuda.is_available()):
-                outputs = model(inputs)
-                loss = criterion(outputs, labels)
-            val_loss += loss.item()
-            _, predicted = outputs.max(1)
-            val_total += labels.size(0)
-            val_correct += predicted.eq(labels).sum().item()
-            val_preds.extend(predicted.cpu().numpy())
-            val_labels_np.extend(labels.cpu().numpy())
+    # === Validation ===
+    if use_ema:
+        with model_ema.average_parameters():
+            model.eval()
+            val_loss, val_correct, val_total = 0.0, 0, 0
+            val_preds, val_labels_np = [], []
+            with torch.no_grad():
+                for inputs, labels in val_loader:
+                    inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+                    with torch.amp.autocast('cuda', enabled=torch.cuda.is_available()):
+                        outputs = model(inputs)
+                        loss = criterion(outputs, labels)
+                    val_loss += loss.item()
+                    _, predicted = outputs.max(1)
+                    val_total += labels.size(0)
+                    val_correct += predicted.eq(labels).sum().item()
+                    val_preds.extend(predicted.cpu().numpy())
+                    val_labels_np.extend(labels.cpu().numpy())
+    else:
+        model.eval()
+        val_loss, val_correct, val_total = 0.0, 0, 0
+        val_preds, val_labels_np = [], []
+        with torch.no_grad():
+            for inputs, labels in val_loader:
+                inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+                with torch.amp.autocast('cuda', enabled=torch.cuda.is_available()):
+                    outputs = model(inputs)
+                    loss = criterion(outputs, labels)
+                val_loss += loss.item()
+                _, predicted = outputs.max(1)
+                val_total += labels.size(0)
+                val_correct += predicted.eq(labels).sum().item()
+                val_preds.extend(predicted.cpu().numpy())
+                val_labels_np.extend(labels.cpu().numpy())
 
     val_loss = val_loss / len(val_loader)
     val_acc  = 100 * val_correct / val_total
+
 
     print(f'\nEpoch {epoch} completed: '
           f'Train Loss {train_loss:.4f}, Train Acc {train_acc:.2f}%, '
@@ -225,30 +250,41 @@ for epoch in range(1, EPOCHS + 1):
 
 
 
-    # === 🧪 Test Evaluation (no learning, just monitoring) ===
+    # === 🧪 Test Evaluation (EMA-aware) ===
     from sklearn.metrics import roc_auc_score
 
-    model.eval()
-    all_probs, all_labels = [], []
-    test_correct, test_total = 0, 0
+    if use_ema:
+        with model_ema.average_parameters():
+            model.eval()
+            all_probs, all_labels = [], []
+            test_correct, test_total = 0, 0
+            with torch.no_grad():
+                for inputs, labels in test_loader:
+                    inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+                    outputs = model(inputs)
+                    probs = torch.softmax(outputs, dim=1)[:, 1]
+                    _, predicted = outputs.max(1)
+                    test_total += labels.size(0)
+                    test_correct += predicted.eq(labels).sum().item()
+                    all_probs.extend(probs.cpu().numpy())
+                    all_labels.extend(labels.cpu().numpy())
+    else:
+        model.eval()
+        all_probs, all_labels = [], []
+        test_correct, test_total = 0, 0
+        with torch.no_grad():
+            for inputs, labels in test_loader:
+                inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+                outputs = model(inputs)
+                probs = torch.softmax(outputs, dim=1)[:, 1]
+                _, predicted = outputs.max(1)
+                test_total += labels.size(0)
+                test_correct += predicted.eq(labels).sum().item()
+                all_probs.extend(probs.cpu().numpy())
+                all_labels.extend(labels.cpu().numpy())
 
-    with torch.no_grad():
-        for inputs, labels in test_loader:
-            inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
-            outputs = model(inputs)
-            probs = torch.softmax(outputs, dim=1)[:, 1]  # Probability of class NC
-            _, predicted = outputs.max(1)
-            test_total += labels.size(0)
-            test_correct += predicted.eq(labels).sum().item()
-
-            all_probs.extend(probs.cpu().numpy())
-            all_labels.extend(labels.cpu().numpy())
-
-    # Compute metrics
-    # === Compute test metrics ===
     test_acc = 100 * test_correct / test_total
     test_auc = roc_auc_score(all_labels, all_probs)
-
     print(f"🧠 [TEST] Epoch {epoch}: Acc={test_acc:.2f}%, AUC={test_auc:.3f}")
 
     # Log results
