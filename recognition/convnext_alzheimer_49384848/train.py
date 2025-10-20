@@ -121,6 +121,23 @@ cosine = CosineAnnealingLR(optimizer, T_max=EPOCHS - 5, eta_min=1e-6)
 
 scheduler = SequentialLR(optimizer, schedulers=[warmup, cosine], milestones=[5])
 
+# --- MixUp augmentation utilities ---
+def mixup_data(x, y, alpha=0.2):
+    """Return mixed inputs, pairs of targets, and lambda."""
+    if alpha > 0:
+        lam = np.random.beta(alpha, alpha)
+    else:
+        lam = 1
+    batch_size = x.size(0)
+    index = torch.randperm(batch_size).to(x.device)
+    mixed_x = lam * x + (1 - lam) * x[index, :]
+    y_a, y_b = y, y[index]
+    return mixed_x, y_a, y_b, lam
+
+def mixup_criterion(criterion, pred, y_a, y_b, lam):
+    """Compute loss for mixed targets."""
+    return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
+
 # (Continue with training loop…)
 best_val_acc = 0.0
 history = {'train_loss': [], 'val_loss': [], 'train_acc': [], 'val_acc': []}
@@ -145,9 +162,13 @@ for epoch in range(1, EPOCHS + 1):
         labels = labels.to(DEVICE)
         optimizer.zero_grad()
 
+        # --- Apply MixUp ---
+        inputs, targets_a, targets_b, lam = mixup_data(inputs, labels, alpha=0.2)
+
         with torch.amp.autocast('cuda', enabled=torch.cuda.is_available()):
             outputs = model(inputs)
-            loss = criterion(outputs, labels)
+            loss = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
+            
 
         scaler.scale(loss).backward()
         scaler.unscale_(optimizer)
@@ -189,7 +210,7 @@ for epoch in range(1, EPOCHS + 1):
     val_loss = val_loss / len(val_loader)
     val_acc  = 100 * val_correct / val_total
 
-    print(f'Epoch {epoch} completed: '
+    print(f'\nEpoch {epoch} completed: '
           f'Train Loss {train_loss:.4f}, Train Acc {train_acc:.2f}%, '
           f'Val Loss {val_loss:.4f}, Val Acc {val_acc:.2f}%')
 
@@ -300,7 +321,6 @@ for epoch in range(1, EPOCHS + 1):
     lrs.append(current_lr)
     print(f"Current LR after epoch {epoch}: {current_lr:.6f}")
 
-"""# Plot training curves"""
 
 """# Plot training curves"""
 
