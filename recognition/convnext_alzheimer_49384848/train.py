@@ -81,61 +81,39 @@ elif torch.cuda.is_available():
 else:
     DEVICE = DEVICE_CPU
 
-
-
 from sklearn.metrics import roc_auc_score
-import timm, torch
-from collections import OrderedDict
 
 print("Current working directory:", os.getcwd())
 print(f"Using device: {DEVICE}")
 
-# --- Load data ---
+# Load data
 train_loader, val_loader, test_loader = get_loaders(
-    data_root  = DATA_ROOTs,
+    data_root  =  DATA_ROOTs,
     batch_size = BATCH_SIZE
 )
 print(f"Train images: {len(train_loader.dataset)} | "
-      f"Val images:   {len(val_loader.dataset)} | "
-      f"Test images:  {len(test_loader.dataset)}")
-
-# --- Model setup ---
+    f"Val images:   {len(val_loader.dataset)} | "
+    f"Test images:  {len(test_loader.dataset)}")
+# Model setup
 model = ConvNeXtMRI(
     in_chans=3,
     num_classes=NUM_CLASSES,
     depths=[2, 2, 4, 2],
     dims=[48, 96, 192, 384],
-    drop_path_rate=0.2,  # lower drop-path for fine-tuning
-    norm_type='bn'
+    drop_path_rate=DROP_PATH_RATE
 ).to(DEVICE)
 
-# --- Load pretrained ConvNeXt-Tiny weights (ImageNet) ---
-print("Loading pretrained ConvNeXt-Tiny weights...")
-pretrained = timm.create_model('convnext_tiny', pretrained=True)
-pre_dict = pretrained.state_dict()
-model_dict = model.state_dict()
+class_weights = torch.tensor([1.1, 0.9], dtype=torch.float32).to(DEVICE)
+criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=0.05)
+optimizer = optim.AdamW(model.parameters(), lr=LR, weight_decay=1e-4)
 
-filtered = {k: v for k, v in pre_dict.items()
-            if k in model_dict and v.size() == model_dict[k].size()}
-
-model_dict.update(filtered)
-model.load_state_dict(model_dict)
-print(f"✅ Loaded {len(filtered)} pretrained layers.")
-
-# --- Loss, optimizer, and scheduler ---
-criterion = nn.CrossEntropyLoss(label_smoothing=0.05)
-optimizer = optim.AdamW(model.parameters(), lr=1e-5, weight_decay=1e-4)
 
 from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR
 
 warmup = LinearLR(optimizer, start_factor=0.1, total_iters=3)
-cosine = CosineAnnealingLR(optimizer, T_max=150, eta_min=1e-6)
+cosine = CosineAnnealingLR(optimizer, T_max=EPOCHS - 3, eta_min=1e-6)
+
 scheduler = SequentialLR(optimizer, schedulers=[warmup, cosine], milestones=[3])
-
-print("Setup complete ✅ Fine-tuning ready.")
-
-
-
 
 # (Continue with training loop…)
 best_val_acc = 0.0
@@ -337,7 +315,14 @@ plt.savefig('lr_schedule.png', dpi=150)
 plt.show()
 print('📈 Learning rate schedule saved as lr_schedule.png')
 
-model.load_state_dict(torch.load('best_model.pth'))
+# === Load best model (prefer the test-pass version if available) ===
+if os.path.exists('best_model_test_acc.pth'):
+    model.load_state_dict(torch.load('best_model_test_acc.pth'))
+    print("✅ Loaded model: best_model_test_acc.pth")
+else:
+    model.load_state_dict(torch.load('best_model.pth'))
+    print("✅ Loaded model: best_model.pth (best validation model)")
+    
 model.eval()
 test_correct, test_total = 0, 0
 with torch.no_grad():
