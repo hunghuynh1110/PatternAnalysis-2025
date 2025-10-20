@@ -139,7 +139,7 @@ class ConvNeXtStage(nn.Module):
 class ConvNeXtMRI(nn.Module):
     def __init__(self, in_chans=3, num_classes=2, depths=[2,2,4,2],
                  dims=[48,96,192,384],
-                 drop_path_rate=0.1,
+                 drop_path_rate=0.25,
                  norm_type: Literal["ln","bn"] = "ln"):
         super().__init__()
         self.norm_type = norm_type
@@ -171,7 +171,9 @@ class ConvNeXtMRI(nn.Module):
 
         # final normalization & classifier
         self.norm = nn.LayerNorm(dims[-1], eps=1e-6)
+        self.dropout = nn.Dropout(p=0.4)
         self.head = nn.Linear(dims[-1], num_classes)
+        
 
         ## init weight
         self.apply(self._init_weights)
@@ -200,6 +202,7 @@ class ConvNeXtMRI(nn.Module):
         # Global average pooling (mean over H and W)
         x = x.mean([-2, -1])
         x = self.norm(x)
+        x = self.dropout(x)
         x = self.head(x)
         return x
         
