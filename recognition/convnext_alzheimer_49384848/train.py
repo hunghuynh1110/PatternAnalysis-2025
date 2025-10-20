@@ -7,7 +7,7 @@ Original file is located at
     https://colab.research.google.com/drive/1hJ0CT9myMA9XpMwpq7uvetrw1zNkjBWu
 """
 
-EPOCHS = 150
+EPOCHS = 200
 DATA_ROOTs = "/content/data/AD_NC"
 
 # 1. GẮN KẾT GOOGLE DRIVE
@@ -60,6 +60,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torchvision.models import convnext_tiny, ConvNeXt_Tiny_Weights
 
+from modules import ConvNeXtMRI
 import matplotlib.pyplot as plt
 
 torch.backends.cudnn.benchmark = True
@@ -69,7 +70,7 @@ torch.backends.cudnn.deterministic = False
 from dataset import get_loaders
 from constants import (
     DEVICE_MPS, DEVICE_CUDA, DEVICE_CPU,
-    BATCH_SIZE, LR,
+    BATCH_SIZE, LR, WD,
     DATA_ROOT,
     NUM_CLASSES, DROP_PATH_RATE
 )
@@ -82,6 +83,9 @@ else:
     DEVICE = DEVICE_CPU
 
 from sklearn.metrics import roc_auc_score
+import importlib, modules
+importlib.reload(modules)
+from modules import ConvNeXtMRI
 
 print("Current working directory:", os.getcwd())
 print(f"Using device: {DEVICE}")
@@ -100,20 +104,22 @@ model = ConvNeXtMRI(
     num_classes=NUM_CLASSES,
     depths=[2, 2, 4, 2],
     dims=[48, 96, 192, 384],
-    drop_path_rate=DROP_PATH_RATE
+    drop_path_rate=DROP_PATH_RATE,
+    norm_type='bn'
 ).to(DEVICE)
 
-class_weights = torch.tensor([1.1, 0.9], dtype=torch.float32).to(DEVICE)
-criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=0.05)
-optimizer = optim.AdamW(model.parameters(), lr=LR, weight_decay=1e-4)
+model.freeze_stages(n=2)
+
+criterion = nn.CrossEntropyLoss(label_smoothing=0.075)
+optimizer = optim.AdamW(model.parameters(), lr=LR, weight_decay=WD)
 
 
 from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR
 
-warmup = LinearLR(optimizer, start_factor=0.1, total_iters=3)
-cosine = CosineAnnealingLR(optimizer, T_max=EPOCHS - 3, eta_min=1e-6)
+warmup = LinearLR(optimizer, start_factor=0.1, total_iters=5)
+cosine = CosineAnnealingLR(optimizer, T_max=EPOCHS - 5, eta_min=1e-6)
 
-scheduler = SequentialLR(optimizer, schedulers=[warmup, cosine], milestones=[3])
+scheduler = SequentialLR(optimizer, schedulers=[warmup, cosine], milestones=[5])
 
 # (Continue with training loop…)
 best_val_acc = 0.0
@@ -125,6 +131,11 @@ lrs = []  # track learning rate per epoch
 scaler = torch.amp.GradScaler('cuda')
 
 for epoch in range(1, EPOCHS + 1):
+    if epoch == 6:
+        for param in model.parameters():
+            param.requires_grad = True
+        print("🟢 Unfroze all layers — full training resumed")
+
     model.train()
     running_loss = 0.0
     correct = 0
@@ -149,10 +160,6 @@ for epoch in range(1, EPOCHS + 1):
         total += labels.size(0)
         correct += predicted.eq(labels).sum().item()
 
-        if batch_idx % 50 == 0:
-            print(f'Epoch {epoch} | Batch {batch_idx}/{len(train_loader)} | '
-                  f'Loss: {running_loss / batch_idx:.4f} | '
-                  f'Acc: {100 * correct / total:.2f}%')
 
     # === End of training epoch ===
     train_loss = running_loss / len(train_loader)
@@ -169,7 +176,7 @@ for epoch in range(1, EPOCHS + 1):
         for inputs, labels in val_loader:
             inputs = inputs.to(DEVICE)
             labels = labels.to(DEVICE)
-            with torch.cuda.amp.autocast(enabled=torch.cuda.is_available()):
+            with torch.amp.autocast('cuda', enabled=torch.cuda.is_available()):
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)
             val_loss += loss.item()
@@ -217,6 +224,7 @@ for epoch in range(1, EPOCHS + 1):
             all_labels.extend(labels.cpu().numpy())
 
     # Compute metrics
+    # === Compute test metrics ===
     test_acc = 100 * test_correct / test_total
     test_auc = roc_auc_score(all_labels, all_probs)
 
@@ -226,10 +234,25 @@ for epoch in range(1, EPOCHS + 1):
     with open('training_log.txt', 'a') as f:
         f.write(f"[TEST] Epoch {epoch}: Acc={test_acc:.2f}%, AUC={test_auc:.3f}\n")
 
-    # # Optional: Stop training early if test AUC ≥ 0.8
-    # if test_auc >= 0.8:
-    #     print(f"🎯 Early stop! Test AUC={test_auc:.3f} ≥ 0.8")
-    #     break
+    # === Track best test accuracy ===
+    if epoch == 1:
+        best_test_acc = test_acc  # initialize tracker
+    else:
+        try:
+            best_test_acc
+        except NameError:
+            best_test_acc = test_acc  # safety init if running standalone
+
+    # ✅ Save model if test accuracy improves
+    if test_acc > best_test_acc:
+        best_test_acc = test_acc
+        torch.save(model.state_dict(), 'best_model_test_acc.pth')
+        print(f"⭐ New best test accuracy: {test_acc:.2f}% — saved as 'best_model_test_acc.pth'")
+
+    # ✅ Optional: also save if passes the 0.8 threshold (as before)
+    if test_acc >= 80.0:
+        torch.save(model.state_dict(), 'best_model_pass_test.pth')
+        print(f"🏁 Test accuracy reached {test_acc:.2f}% — model saved as 'best_model_pass_test.pth'")
 
 
 
@@ -279,6 +302,8 @@ for epoch in range(1, EPOCHS + 1):
 
 """# Plot training curves"""
 
+"""# Plot training curves"""
+
 plt.figure(figsize=(10,4))
 plt.subplot(1,2,1)
 plt.plot(epochs, history['train_loss'], label='Train Loss')
@@ -322,7 +347,7 @@ if os.path.exists('best_model_test_acc.pth'):
 else:
     model.load_state_dict(torch.load('best_model.pth'))
     print("✅ Loaded model: best_model.pth (best validation model)")
-    
+
 model.eval()
 test_correct, test_total = 0, 0
 with torch.no_grad():
