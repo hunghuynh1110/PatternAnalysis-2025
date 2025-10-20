@@ -104,11 +104,77 @@ class ConvNeXtStage(nn.Module):
             x = self.downsample[1](x)
         return self.blocks(x)
 
-
-
+class ConvNeXtMRI(nn.Module):
+    def __init__(self, in_chans=3, num_classes = 2, depths = [2,2,4,2],
+                 dims = [48,96,192,384],
+                 drop_path_rate = 0.1):
+        super().__init__()
         
+        #Stem: patchify image
+        self.stem = nn.Sequential(nn.Conv2d(in_chans, dims[0], kernel_size=4, stride = 4),
+                                  nn.LayerNorm(dims[0], eps=1e-6))
+        
+        #drop path schedule
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]
+        
+        # Build stage
+        cur = 0
+        self.stages = nn.ModuleList()
+        for i in range(len(depths)):
+            stage = ConvNeXtStage(
+                dim = dims[i] if i ==0 else dims[i-1],
+                depth=depths[i],
+                drop_path_rates=dpr[cur:cur + depths[i]],
+                downsample=(i != 0)
+            )
+            self.stages.append(stage)
+            cur += depths[i]
+            
+        
+        # final normalization & classifier
+        self.norm = nn.LayerNorm(dims[-1], eps=1e-6)
+        self.head = nn.Linear(dims[-1], num_classes)
+        
+        ## init weight
+        self.apply(self._init_weights)
+        
+    
+    def _init_weights(self,m):
+        if isinstance(m, nn.Linear):
+            nn.init.trunc_normal_(m.weight, std = .02)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+            
+    
+    def forward(self,x):
+        x = self.stem[0](x)
+        x = x.permute(0, 2, 3, 1)
+        x = self.stem[1](x)
+        x = x.permute(0, 3, 1, 2)
+
+        for stage in self.stages:
+            x = stage(x)
+
+        # Global average pooling (mean over H and W)
+        x = x.mean([-2, -1])
+        x = self.norm(x)
+        x = self.head(x)
+        return x
+        
+        
+        
+        
+        
+        
+        
+        
+        
+
 if __name__ == "__main__":
-    blk = ConvNeXtBlock(dim=96, drop_path=0.1)
-    x = torch.randn(2, 96, 56, 56)
-    y = blk(x)
-    print(x.shape, "->", y.shape)  # should match
+    model = ConvNeXtMRI()
+    x = torch.randn(1, 3, 224, 224)
+    y = model(x)
+    print("Output shape:", y.shape)
