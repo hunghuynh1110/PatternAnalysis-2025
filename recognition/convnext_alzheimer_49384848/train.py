@@ -122,7 +122,7 @@ cosine = CosineAnnealingLR(optimizer, T_max=EPOCHS - 5, eta_min=1e-6)
 scheduler = SequentialLR(optimizer, schedulers=[warmup, cosine], milestones=[5])
 
 # --- MixUp augmentation utilities ---
-def mixup_data(x, y, alpha=0.2):
+def mixup_data(x, y, alpha=0.1):
     """Return mixed inputs, pairs of targets, and lambda."""
     if alpha > 0:
         lam = np.random.beta(alpha, alpha)
