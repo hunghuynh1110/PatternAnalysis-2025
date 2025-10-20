@@ -48,6 +48,13 @@ def _extract_subject_id(path: str):
     m = re.match(r"(\d+)_", fname)
     return m.group(1) if m else fname  # fallback
 
+class AddGaussianNoise(object):
+    def __init__(self, mean=0., std=0.01):
+        self.mean = mean
+        self.std = std
+    def __call__(self, tensor):
+        return tensor + torch.randn_like(tensor) * self.std + self.mean
+
 class MRIDataset2D(Dataset):
     """MRI 2D JPEG slice dataset for Alzheimer’s classification (AD vs NC)."""
     def __init__(self, root_dir, classes=CLASSES, transform=None):
@@ -94,12 +101,16 @@ def get_loaders(data_root, batch_size=16, val_fraction=0.1, seed=42):
 
     # Define transforms
     train_tf = transforms.Compose([
-        transforms.RandomResizedCrop(IMAGE_SIZE, scale=(0.8, 1.0)),
-        transforms.RandomHorizontalFlip(),
+        transforms.RandomResizedCrop(IMAGE_SIZE, scale=(0.85, 1.0)),
+        transforms.RandomHorizontalFlip(p=0.5),
         transforms.RandomRotation(10),
+        transforms.ColorJitter(brightness=0.1, contrast=0.1),
         transforms.ToTensor(),
-        transforms.Normalize(MEAN,STD)
+        AddGaussianNoise(0., 0.01),
+        transforms.RandomErasing(p=0.25, scale=(0.02, 0.15)),
+        transforms.Normalize(MEAN, STD)
     ])
+    
     val_tf = transforms.Compose([
         transforms.Resize(256),
         transforms.CenterCrop(IMAGE_SIZE),
