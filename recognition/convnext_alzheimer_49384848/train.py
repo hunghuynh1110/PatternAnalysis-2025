@@ -123,6 +123,16 @@ criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
 optimizer = optim.AdamW(model.parameters(), lr=LR, weight_decay=WD)
 scheduler = CosineAnnealingLR(optimizer, T_max=EPOCHS, eta_min=1e-6)
 
+# Schedule variables for augmentation + drop-path
+total_epochs = EPOCHS
+explore_end_epoch    = int(total_epochs * 0.5)   # e.g. first 50%
+transition_end_epoch = int(total_epochs * 0.833) # next ~33%
+
+mixup_alpha_init      = 0.8
+cutmix_alpha_init     = 1.0
+mixup_prob_init       = 1.0
+drop_path_rate_init   = DROP_PATH_RATE
+
 # --- MixUp augmentation utilities ---
 def mixup_data(x, y, alpha=0.8):
     """Return mixed inputs, pairs of targets, and lambda."""
@@ -185,13 +195,25 @@ lrs = []  # track learning rate per epoch
 scaler = torch.amp.GradScaler('cuda')
 
 for epoch in range(1, EPOCHS + 1):
-    # if epoch == 10:
-    #   for p in model.parameters():
-    #       p.requires_grad = True
-    #   for g in optimizer.param_groups:
-    #       g['lr'] *= 0.25  # reduce temporarily
-    #   scheduler = CosineAnnealingLR(optimizer, T_max=EPOCHS - 5, eta_min=1e-6)
-    #   print("🟢 Unfroze all layers — reduced LR ×0.25 for stability")
+
+    if epoch <= explore_end_epoch:
+        mixup_prob   = mixup_prob_init
+        mixup_alpha  = mixup_alpha_init
+        cutmix_alpha = cutmix_alpha_init
+        drop_path_rate_current = drop_path_rate_init
+    elif epoch <= transition_end_epoch:
+        progress = (epoch - explore_end_epoch)/float(transition_end_epoch - explore_end_epoch)
+        mixup_prob   = mixup_prob_init * (1.0 - 0.5 * progress)            # 1.0 → 0.5
+        mixup_alpha  = mixup_alpha_init * (1.0 - 0.6 * progress)          # 0.8 → ~0.32
+        cutmix_alpha = cutmix_alpha_init * (1.0 - 0.6 * progress)         # 1.0 → ~0.4
+        drop_path_rate_current = drop_path_rate_init * (1.0 - progress)    # drop_path → 0
+    else:
+        mixup_prob   = 0.0
+        mixup_alpha  = 0.0
+        cutmix_alpha = 0.0
+        drop_path_rate_current = 0.0
+    # Update model's drop path rate if supported
+    model.set_drop_path_rate(drop_path_rate_current)
 
 
     model.train()
@@ -205,16 +227,15 @@ for epoch in range(1, EPOCHS + 1):
 
         # --- Apply MixUp ---
         with torch.amp.autocast('cuda', enabled=torch.cuda.is_available()):
-            if epoch > 5:
-                # --- MixUp / CutMix branch ---
+            # Apply MixUp/CutMix based on schedule
+            if epoch > 5 and random.random() < mixup_prob:
                 if random.random() < 0.5:
-                    inputs, targets_a, targets_b, lam = mixup_data(inputs, labels, alpha=0.8)
+                    inputs, y_a, y_b, lam = mixup_data(inputs, labels, mixup_alpha)
                 else:
-                    inputs, targets_a, targets_b, lam = cutmix_data(inputs, labels, alpha=1.0)
+                    inputs, y_a, y_b, lam = cutmix_data(inputs, labels, cutmix_alpha)
                 outputs = model(inputs)
-                loss = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
+                loss = mixup_criterion(criterion, outputs, y_a, y_b, lam)
             else:
-                # --- Normal training branch ---
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)
 
@@ -363,8 +384,6 @@ for epoch in range(1, EPOCHS + 1):
     current_lr = optimizer.param_groups[0]['lr']
     lrs.append(current_lr)
     print(f"Current LR after epoch {epoch}: {current_lr:.6f}")
-
-
 
 """# Plot training curves"""
 
