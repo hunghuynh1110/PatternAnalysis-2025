@@ -69,7 +69,7 @@ class MRIDataset2D(Dataset):
             class_dir = os.path.join(root_dir, c)
             if not os.path.isdir(class_dir):
                 raise FileNotFoundError(f"Missing folder: {class_dir}")
-            for fname in os.listdir(class_dir):
+            for fname in sorted(os.listdir(class_dir)):
                 if fname.lower().endswith(img_exts):
                     self.samples.append((os.path.join(class_dir, fname), self.class2idx[c]))
 
@@ -92,6 +92,11 @@ class MRIDataset2D(Dataset):
             ])(img)
         return img, label
 
+class PerImageZScore(object):
+    def __call__(self, x):
+        m = x.mean()
+        s = x.std().clamp_min(1e-6)
+        return (x - m) / s
 
 def get_loaders(data_root, batch_size=16, val_fraction=0.1, seed=42):
     """
@@ -101,13 +106,17 @@ def get_loaders(data_root, batch_size=16, val_fraction=0.1, seed=42):
 
     # Define transforms
     train_tf = transforms.Compose([
-        transforms.RandomResizedCrop(IMAGE_SIZE, scale=(0.85, 1.0)),
+        transforms.RandomResizedCrop(IMAGE_SIZE, scale=(0.80, 1.0)),   # maybe slightly larger scale
         transforms.RandomHorizontalFlip(p=0.5),
-        transforms.RandomRotation(10),
-        transforms.ColorJitter(brightness=0.1, contrast=0.1),
+        transforms.RandomVerticalFlip(p=0.2),                        # add vertical flip if valid
+        transforms.RandomRotation(degrees=15),                        # more rotation
+        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05),
+        transforms.RandomAffine(degrees=0, translate=(0.05, 0.05), scale=(0.9,1.1), shear=5),
+        transforms.GaussianBlur(kernel_size=(3,3), sigma=(0.1,1.0)),  # blur to simulate artefacts
         transforms.ToTensor(),
-        AddGaussianNoise(0., 0.01),
-        transforms.RandomErasing(p=0.25, scale=(0.02, 0.15)),
+        PerImageZScore(),
+        AddGaussianNoise(0., 0.02),                                   # increase noise magnitude slightly
+        transforms.RandomErasing(p=0.3, scale=(0.02, 0.20), ratio=(0.3,3.0)),
         transforms.Normalize(MEAN, STD)
     ])
     
@@ -115,18 +124,19 @@ def get_loaders(data_root, batch_size=16, val_fraction=0.1, seed=42):
         transforms.Resize(256),
         transforms.CenterCrop(IMAGE_SIZE),
         transforms.ToTensor(),
+        PerImageZScore(),
         transforms.Normalize(MEAN,STD)
     ])
 
     # Load full training dataset
     train_root = os.path.join(data_root, 'train')
-    full_train = MRIDataset2D(train_root, CLASSES, transform=train_tf)
+    base_train = MRIDataset2D(train_root, CLASSES, transform=None)
 
     # after building full list in MRIDataset2D(...).samples
     # Build arrays for group split
 
-    all_paths  = np.array([p for p, _ in full_train.samples])
-    all_labels = np.array([y for _, y in full_train.samples])
+    all_paths  = np.array([p for p, _ in base_train.samples])
+    all_labels = np.array([y for _, y in base_train.samples])
     groups     = np.array([_extract_subject_id(p) for p in all_paths])
 
     gss = GroupShuffleSplit(n_splits=1, test_size=val_fraction, random_state=seed)
@@ -134,8 +144,10 @@ def get_loaders(data_root, batch_size=16, val_fraction=0.1, seed=42):
 
     # Subset datasets by indices
     from torch.utils.data import Subset
-    train_ds = Subset(full_train, train_idx)
-    val_ds   = Subset(full_train, val_idx)
+    train_ds_all = MRIDataset2D(train_root, CLASSES, transform=train_tf)
+    val_ds_all   = MRIDataset2D(train_root, CLASSES, transform=val_tf)
+    train_ds = Subset(train_ds_all, train_idx)
+    val_ds   = Subset(val_ds_all,   val_idx)
     
 
     # Load test dataset
@@ -154,38 +166,42 @@ def get_loaders(data_root, batch_size=16, val_fraction=0.1, seed=42):
 
 
 
-# # Demo block (runs ONLY when executing this file directly, not on import)
-# if __name__ == "__main__":
-#     from torchvision import transforms
-
-# # Temporary transform: resize and convert to tensor ONLY
-# raw_tf = transforms.Compose([
-#     transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
-#     transforms.ToTensor()
-# ])
-
-# # Build an unnormalized dataset
-# raw_ds = MRIDataset2D("./AD_NC/train", CLASSES, transform=raw_tf)
-# raw_loader = DataLoader(raw_ds, batch_size=32, shuffle=False)
-
-# mean, std = compute_mean_std(raw_loader, device='mps')
-# print(mean, std)
-
 # Demo block (runs ONLY when executing this file directly, not on import)
 if __name__ == "__main__":
-    import matplotlib.pyplot as plt
+    from torchvision import transforms as _t
+    import os as _os
+    _BASE_DIR = _os.path.dirname(__file__)
+    _roots = _os.path.join(_BASE_DIR, "AD_NC/train")
 
-    DATA_ROOT = "./AD_NC"  # folder alongside this file
-    tl, vl, _ = get_loaders(DATA_ROOT, batch_size=4, val_fraction=0.1)
+    _raw_tf = _t.Compose([
+        _t.Resize((IMAGE_SIZE, IMAGE_SIZE)),
+        _t.ToTensor()
+    ])
 
-    xb, yb = next(iter(tl))
-    print("Train batch:", xb.shape, yb[:4])
+    _raw_ds = MRIDataset2D(_roots, CLASSES, transform=_raw_tf)
+    _raw_loader = DataLoader(_raw_ds, batch_size=32, shuffle=False)
 
-    # visualize first 4
-    plt.figure(figsize=(10,3))
-    for i in range(min(4, xb.size(0))):
-        plt.subplot(1, 4, i+1)
-        plt.imshow(xb[i].permute(1,2,0)[:, :, 0], cmap='gray')
-        plt.title(CLASSES[yb[i].item()])
-        plt.axis('off')
-    plt.show()
+    _mean, _std = compute_mean_std(_raw_loader, device='mps')
+    print(_mean, _std)
+
+
+
+
+# Demo block (runs ONLY when executing this file directly, not on import)
+# if __name__ == "__main__":
+#     import matplotlib.pyplot as plt
+
+#     DATA_ROOT = "./AD_NC"  # folder alongside this file
+#     tl, vl, _ = get_loaders(DATA_ROOT, batch_size=4, val_fraction=0.1)
+
+#     xb, yb = next(iter(tl))
+#     print("Train batch:", xb.shape, yb[:4])
+
+#     # visualize first 4
+#     plt.figure(figsize=(10,3))
+#     for i in range(min(4, xb.size(0))):
+#         plt.subplot(1, 4, i+1)
+#         plt.imshow(xb[i].permute(1,2,0)[:, :, 0], cmap='gray')
+#         plt.title(CLASSES[yb[i].item()])
+#         plt.axis('off')
+#     plt.show()
