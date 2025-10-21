@@ -7,7 +7,7 @@ Original file is located at
     https://colab.research.google.com/drive/1hJ0CT9myMA9XpMwpq7uvetrw1zNkjBWu
 """
 
-EPOCHS = 200
+EPOCHS = 150
 DATA_ROOTs = "/content/data/AD_NC"
 
 # 1. GẮN KẾT GOOGLE DRIVE
@@ -54,6 +54,7 @@ print("Kiểm tra các file quan trọng:")
 !ls /content/data/AD_NC
 
 import os
+import numpy as np
 
 import torch
 import torch.nn as nn
@@ -62,8 +63,6 @@ from torchvision.models import convnext_tiny, ConvNeXt_Tiny_Weights
 
 from modules import ConvNeXtMRI
 import matplotlib.pyplot as plt
-
-from torch_ema import ExponentialMovingAverage
 
 torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.deterministic = False
@@ -84,10 +83,13 @@ elif torch.cuda.is_available():
 else:
     DEVICE = DEVICE_CPU
 
+!pip install torch-ema
+
 from sklearn.metrics import roc_auc_score
 import importlib, modules
 importlib.reload(modules)
 from modules import ConvNeXtMRI
+from torch_ema import ExponentialMovingAverage
 
 print("Current working directory:", os.getcwd())
 print(f"Using device: {DEVICE}")
@@ -123,9 +125,24 @@ if use_ema:
 from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR
 
 warmup = LinearLR(optimizer, start_factor=0.1, total_iters=5)
-cosine = CosineAnnealingLR(optimizer, T_max=EPOCHS - 5, eta_min=1e-6)
+cosine = CosineAnnealingLR(optimizer, T_max=EPOCHS - 6, eta_min=1e-6)
 
-scheduler = SequentialLR(optimizer, schedulers=[warmup, cosine], milestones=[5])
+import math
+from torch.optim.lr_scheduler import LambdaLR
+
+# === Define a smooth warmup + cosine decay scheduler ===
+def lr_lambda(epoch):
+    e = epoch + 1
+    warmup_epochs = 5
+    if e <= warmup_epochs:
+        # linear warmup: from 0.1x → 1.0x over first 5 epochs
+        return 0.1 + 0.9 * (e / warmup_epochs)
+    else:
+        # cosine decay from 1.0 → eta_min_ratio (~0) across remaining epochs
+        progress = (e - warmup_epochs) / (EPOCHS - warmup_epochs)
+        return 0.5 * (1 + math.cos(math.pi * progress))  # standard cosine decay
+
+scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
 
 # --- MixUp augmentation utilities ---
 def mixup_data(x, y, alpha=0.1):
@@ -144,7 +161,42 @@ def mixup_criterion(criterion, pred, y_a, y_b, lam):
     """Compute loss for mixed targets."""
     return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
 
+import numpy as np
+import random
+import torch
+
+def rand_bbox(size, lam):
+    """Generate random bounding box for CutMix."""
+    W = size[2]
+    H = size[3]
+    cut_rat = np.sqrt(1. - lam)
+    cut_w = int(W * cut_rat)
+    cut_h = int(H * cut_rat)
+
+    # uniform center
+    cx = np.random.randint(W)
+    cy = np.random.randint(H)
+
+    bbx1 = np.clip(cx - cut_w // 2, 0, W)
+    bby1 = np.clip(cy - cut_h // 2, 0, H)
+    bbx2 = np.clip(cx + cut_w // 2, 0, W)
+    bby2 = np.clip(cy + cut_h // 2, 0, H)
+
+    return bbx1, bby1, bbx2, bby2
+
+def cutmix_data(x, y, alpha=1.0):
+    """Apply CutMix augmentation."""
+    lam = np.random.beta(alpha, alpha)
+    rand_index = torch.randperm(x.size(0)).to(x.device)
+    y_a = y
+    y_b = y[rand_index]
+    bbx1, bby1, bbx2, bby2 = rand_bbox(x.size(), lam)
+    x[:, :, bbx1:bbx2, bby1:bby2] = x[rand_index, :, bbx1:bbx2, bby1:bby2]
+    lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) / (x.size(-1) * x.size(-2)))
+    return x, y_a, y_b, lam
+
 # (Continue with training loop…)
+print("🔹 Training started ...")
 best_val_acc = 0.0
 history = {'train_loss': [], 'val_loss': [], 'train_acc': [], 'val_acc': []}
 epochs = range(1, EPOCHS + 1)
@@ -155,9 +207,12 @@ scaler = torch.amp.GradScaler('cuda')
 
 for epoch in range(1, EPOCHS + 1):
     if epoch == 6:
-        for param in model.parameters():
-            param.requires_grad = True
-        print("🟢 Unfroze all layers — full training resumed")
+      for p in model.parameters():
+          p.requires_grad = True
+      for g in optimizer.param_groups:
+          g['lr'] *= 0.25  # reduce temporarily
+      scheduler = CosineAnnealingLR(optimizer, T_max=EPOCHS - 5, eta_min=1e-6)
+      print("🟢 Unfroze all layers — reduced LR ×0.25 for stability")
 
     model.train()
     running_loss = 0.0
@@ -169,19 +224,21 @@ for epoch in range(1, EPOCHS + 1):
         optimizer.zero_grad()
 
         # --- Apply MixUp ---
-        inputs, targets_a, targets_b, lam = mixup_data(inputs, labels, alpha=0.2)
+        if random.random() < 0.5:
+            inputs, targets_a, targets_b, lam = mixup_data(inputs, labels, alpha=0.2)
+        else:
+            inputs, targets_a, targets_b, lam = cutmix_data(inputs, labels, alpha=1.0)
 
         with torch.amp.autocast('cuda', enabled=torch.cuda.is_available()):
             outputs = model(inputs)
             loss = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
-            
 
         scaler.scale(loss).backward()
         scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         scaler.step(optimizer)
         scaler.update()
-        
+
         if use_ema:
             model_ema.update()
 
@@ -357,6 +414,7 @@ for epoch in range(1, EPOCHS + 1):
     lrs.append(current_lr)
     print(f"Current LR after epoch {epoch}: {current_lr:.6f}")
 
+"""# Plot training curves"""
 
 """# Plot training curves"""
 
@@ -593,6 +651,8 @@ os.makedirs(SAVE_DIR, exist_ok=True)
 # 3️⃣ List all result files, including the new ones
 result_files = [
     'best_model.pth',
+    'notetrain.ipynb',
+    'best_model_test_acc.pth',
     'confusion_matrix.png',
     'lr_schedule.png',
     'training_curves.png',
