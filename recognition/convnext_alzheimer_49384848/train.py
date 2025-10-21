@@ -7,8 +7,12 @@ Original file is located at
     https://colab.research.google.com/drive/1hJ0CT9myMA9XpMwpq7uvetrw1zNkjBWu
 """
 
-EPOCHS = 150
+EPOCHS = 300
 DATA_ROOTs = "/content/data/AD_NC"
+BATCH_SIZE = 512
+LR = 3e-4
+WD = 0.025
+DROP_PATH_RATE = 0.1
 
 # 1. GẮN KẾT GOOGLE DRIVE
 # BƯỚC NÀY BẮT BUỘC để Colab thấy file trên Drive của bạn.
@@ -71,9 +75,8 @@ torch.backends.cudnn.deterministic = False
 from dataset import get_loaders
 from constants import (
     DEVICE_MPS, DEVICE_CUDA, DEVICE_CPU,
-     WD,BATCH_SIZE, LR,
     DATA_ROOT,
-    NUM_CLASSES, DROP_PATH_RATE
+    NUM_CLASSES
 )
 # Device setup
 if torch.backends.mps.is_available():
@@ -107,26 +110,18 @@ model = ConvNeXtMRI(
     in_chans=3,
     num_classes=NUM_CLASSES,
     depths=[3, 3, 9, 3],
-    dims=[96,192,384,768],
+    dims=[96, 192, 384, 768],
     drop_path_rate=DROP_PATH_RATE
 ).to(DEVICE)
 
-model.freeze_stages(n=2)
-
-criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
-optimizer = optim.AdamW(model.parameters(), lr=LR, weight_decay=WD)
-
-use_ema = True
-if use_ema:
-    ema_decay = 0.9995  # tuned for ~20k samples
-    model_ema = ExponentialMovingAverage(model.parameters(), decay=ema_decay)
+# model.freeze_stages(n=2)
 
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
-# Use a simple CosineAnnealingLR scheduler for the entire training
+
+criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+optimizer = optim.AdamW(model.parameters(), lr=LR, weight_decay=WD)
 scheduler = CosineAnnealingLR(optimizer, T_max=EPOCHS, eta_min=1e-6)
-
-
 
 # --- MixUp augmentation utilities ---
 def mixup_data(x, y, alpha=0.8):
@@ -190,13 +185,14 @@ lrs = []  # track learning rate per epoch
 scaler = torch.amp.GradScaler('cuda')
 
 for epoch in range(1, EPOCHS + 1):
-    if epoch == 10:
-      for p in model.parameters():
-          p.requires_grad = True
-      for g in optimizer.param_groups:
-          g['lr'] *= 0.25  # reduce temporarily
-      scheduler = CosineAnnealingLR(optimizer, T_max=EPOCHS - 5, eta_min=1e-6)
-      print("🟢 Unfroze all layers — reduced LR ×0.25 for stability")
+    # if epoch == 10:
+    #   for p in model.parameters():
+    #       p.requires_grad = True
+    #   for g in optimizer.param_groups:
+    #       g['lr'] *= 0.25  # reduce temporarily
+    #   scheduler = CosineAnnealingLR(optimizer, T_max=EPOCHS - 5, eta_min=1e-6)
+    #   print("🟢 Unfroze all layers — reduced LR ×0.25 for stability")
+
 
     model.train()
     running_loss = 0.0
@@ -208,23 +204,26 @@ for epoch in range(1, EPOCHS + 1):
         optimizer.zero_grad()
 
         # --- Apply MixUp ---
-        if random.random() < 0.5:
-            inputs, targets_a, targets_b, lam = mixup_data(inputs, labels, alpha=0.2)
-        else:
-            inputs, targets_a, targets_b, lam = cutmix_data(inputs, labels, alpha=1.0)
-
         with torch.amp.autocast('cuda', enabled=torch.cuda.is_available()):
-            outputs = model(inputs)
-            loss = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
+            if epoch > 5:
+                # --- MixUp / CutMix branch ---
+                if random.random() < 0.5:
+                    inputs, targets_a, targets_b, lam = mixup_data(inputs, labels, alpha=0.8)
+                else:
+                    inputs, targets_a, targets_b, lam = cutmix_data(inputs, labels, alpha=1.0)
+                outputs = model(inputs)
+                loss = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
+            else:
+                # --- Normal training branch ---
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+
 
         scaler.scale(loss).backward()
         scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         scaler.step(optimizer)
         scaler.update()
-
-        if use_ema:
-            model_ema.update()
 
         running_loss += loss.item()
         _, predicted = outputs.max(1)
@@ -238,39 +237,22 @@ for epoch in range(1, EPOCHS + 1):
 
 
     # === Validation ===
-    if use_ema:
-        with model_ema.average_parameters():
-            model.eval()
-            val_loss, val_correct, val_total = 0.0, 0, 0
-            val_preds, val_labels_np = [], []
-            with torch.no_grad():
-                for inputs, labels in val_loader:
-                    inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
-                    with torch.amp.autocast('cuda', enabled=torch.cuda.is_available()):
-                        outputs = model(inputs)
-                        loss = criterion(outputs, labels)
-                    val_loss += loss.item()
-                    _, predicted = outputs.max(1)
-                    val_total += labels.size(0)
-                    val_correct += predicted.eq(labels).sum().item()
-                    val_preds.extend(predicted.cpu().numpy())
-                    val_labels_np.extend(labels.cpu().numpy())
-    else:
-        model.eval()
-        val_loss, val_correct, val_total = 0.0, 0, 0
-        val_preds, val_labels_np = [], []
-        with torch.no_grad():
-            for inputs, labels in val_loader:
-                inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
-                with torch.amp.autocast('cuda', enabled=torch.cuda.is_available()):
-                    outputs = model(inputs)
-                    loss = criterion(outputs, labels)
-                val_loss += loss.item()
-                _, predicted = outputs.max(1)
-                val_total += labels.size(0)
-                val_correct += predicted.eq(labels).sum().item()
-                val_preds.extend(predicted.cpu().numpy())
-                val_labels_np.extend(labels.cpu().numpy())
+
+    model.eval()
+    val_loss, val_correct, val_total = 0.0, 0, 0
+    val_preds, val_labels_np = [], []
+    with torch.no_grad():
+        for inputs, labels in val_loader:
+            inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+            with torch.amp.autocast('cuda', enabled=torch.cuda.is_available()):
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+            val_loss += loss.item()
+            _, predicted = outputs.max(1)
+            val_total += labels.size(0)
+            val_correct += predicted.eq(labels).sum().item()
+            val_preds.extend(predicted.cpu().numpy())
+            val_labels_np.extend(labels.cpu().numpy())
 
     val_loss = val_loss / len(val_loader)
     val_acc  = 100 * val_correct / val_total
@@ -294,35 +276,19 @@ for epoch in range(1, EPOCHS + 1):
     # === 🧪 Test Evaluation (EMA-aware) ===
     from sklearn.metrics import roc_auc_score
 
-    if use_ema:
-        with model_ema.average_parameters():
-            model.eval()
-            all_probs, all_labels = [], []
-            test_correct, test_total = 0, 0
-            with torch.no_grad():
-                for inputs, labels in test_loader:
-                    inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
-                    outputs = model(inputs)
-                    probs = torch.softmax(outputs, dim=1)[:, 1]
-                    _, predicted = outputs.max(1)
-                    test_total += labels.size(0)
-                    test_correct += predicted.eq(labels).sum().item()
-                    all_probs.extend(probs.cpu().numpy())
-                    all_labels.extend(labels.cpu().numpy())
-    else:
-        model.eval()
-        all_probs, all_labels = [], []
-        test_correct, test_total = 0, 0
-        with torch.no_grad():
-            for inputs, labels in test_loader:
-                inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
-                outputs = model(inputs)
-                probs = torch.softmax(outputs, dim=1)[:, 1]
-                _, predicted = outputs.max(1)
-                test_total += labels.size(0)
-                test_correct += predicted.eq(labels).sum().item()
-                all_probs.extend(probs.cpu().numpy())
-                all_labels.extend(labels.cpu().numpy())
+    model.eval()
+    all_probs, all_labels = [], []
+    test_correct, test_total = 0, 0
+    with torch.no_grad():
+        for inputs, labels in test_loader:
+            inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+            outputs = model(inputs)
+            probs = torch.softmax(outputs, dim=1)[:, 1]
+            _, predicted = outputs.max(1)
+            test_total += labels.size(0)
+            test_correct += predicted.eq(labels).sum().item()
+            all_probs.extend(probs.cpu().numpy())
+            all_labels.extend(labels.cpu().numpy())
 
     test_acc = 100 * test_correct / test_total
     test_auc = roc_auc_score(all_labels, all_probs)
@@ -398,7 +364,14 @@ for epoch in range(1, EPOCHS + 1):
     lrs.append(current_lr)
     print(f"Current LR after epoch {epoch}: {current_lr:.6f}")
 
+
+
 """# Plot training curves"""
+
+x, y = next(iter(train_loader))
+x, y = x.to(DEVICE), y.to(DEVICE)
+out = model(x)
+print(out.mean().item(), out.std().item())
 
 """# Plot training curves"""
 

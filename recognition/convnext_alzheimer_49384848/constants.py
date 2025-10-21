@@ -5,7 +5,7 @@ IMG_EXTS = ('.png', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff')
 MEAN = [0.1115, 0.1115, 0.1115]
 STD  = [0.2186, 0.2186, 0.2186]
 
-NUM_WORKER = 8
+NUM_WORKER = 4
 
 # Device settings
 DEVICE_MPS = 'mps'
