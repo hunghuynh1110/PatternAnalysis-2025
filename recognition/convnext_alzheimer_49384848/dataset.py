@@ -117,7 +117,7 @@ def get_loaders(data_root, batch_size=16, val_fraction=0.1, seed=42):
         transforms.ToTensor(),
         PerImageZScore(),
         AddGaussianNoise(0., 0.02),
-        transforms.RandomErasing(p=0.3, scale=(0.02,0.20), ratio=(0.3,3.0)),
+        transforms.RandomErasing(p=0.25),
         transforms.Normalize(MEAN, STD)
     ])
     

@@ -103,11 +103,13 @@ print(f"Train images: {len(train_loader.dataset)} | "
     f"Val images:   {len(val_loader.dataset)} | "
     f"Test images:  {len(test_loader.dataset)}")
 # Model setup
+
+#add
 model = ConvNeXtMRI(
     in_chans=3,
     num_classes=NUM_CLASSES,
-    depths=[3, 3, 6, 3],
-    dims=[64, 128, 256, 512],
+    depths=[3, 3, 9, 3],
+    dims=[96,192,384,768],
     drop_path_rate=DROP_PATH_RATE,
     norm_type='bn'
 ).to(DEVICE)

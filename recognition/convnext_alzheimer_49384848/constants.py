@@ -15,8 +15,10 @@ DEVICE_CPU  = 'cpu'
 # Data & training
 BATCH_SIZE = 32
 EPOCHS     = 5
-LR         = 3e-4
+LR         = 4e-3
 WD         = 3e-4
+
+WD = 0.01
 
 DATA_ROOT = './recognition/convnext_alzheimer_49384848/AD_NC'
 
