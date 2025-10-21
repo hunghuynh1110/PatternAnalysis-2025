@@ -71,7 +71,7 @@ torch.backends.cudnn.deterministic = False
 from dataset import get_loaders
 from constants import (
     DEVICE_MPS, DEVICE_CUDA, DEVICE_CPU,
-    BATCH_SIZE, LR, WD,
+     WD,BATCH_SIZE, LR,
     DATA_ROOT,
     NUM_CLASSES, DROP_PATH_RATE
 )
@@ -103,20 +103,17 @@ print(f"Train images: {len(train_loader.dataset)} | "
     f"Val images:   {len(val_loader.dataset)} | "
     f"Test images:  {len(test_loader.dataset)}")
 # Model setup
-
-#add
 model = ConvNeXtMRI(
     in_chans=3,
     num_classes=NUM_CLASSES,
     depths=[3, 3, 9, 3],
     dims=[96,192,384,768],
-    drop_path_rate=DROP_PATH_RATE,
-    norm_type='bn'
+    drop_path_rate=DROP_PATH_RATE
 ).to(DEVICE)
 
 model.freeze_stages(n=2)
 
-criterion = nn.CrossEntropyLoss(label_smoothing=0.075)
+criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
 optimizer = optim.AdamW(model.parameters(), lr=LR, weight_decay=WD)
 
 use_ema = True
@@ -124,30 +121,15 @@ if use_ema:
     ema_decay = 0.9995  # tuned for ~20k samples
     model_ema = ExponentialMovingAverage(model.parameters(), decay=ema_decay)
 
-from torch.optim.lr_scheduler import SequentialLR, LinearLR, CosineAnnealingLR
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
-warmup = LinearLR(optimizer, start_factor=0.1, total_iters=5)
-cosine = CosineAnnealingLR(optimizer, T_max=EPOCHS - 6, eta_min=1e-6)
+# Use a simple CosineAnnealingLR scheduler for the entire training
+scheduler = CosineAnnealingLR(optimizer, T_max=EPOCHS, eta_min=1e-6)
 
-import math
-from torch.optim.lr_scheduler import LambdaLR
 
-# === Define a smooth warmup + cosine decay scheduler ===
-def lr_lambda(epoch):
-    e = epoch + 1
-    warmup_epochs = 5
-    if e <= warmup_epochs:
-        # linear warmup: from 0.1x → 1.0x over first 5 epochs
-        return 0.1 + 0.9 * (e / warmup_epochs)
-    else:
-        # cosine decay from 1.0 → eta_min_ratio (~0) across remaining epochs
-        progress = (e - warmup_epochs) / (EPOCHS - warmup_epochs)
-        return 0.5 * (1 + math.cos(math.pi * progress))  # standard cosine decay
-
-scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
 
 # --- MixUp augmentation utilities ---
-def mixup_data(x, y, alpha=0.1):
+def mixup_data(x, y, alpha=0.8):
     """Return mixed inputs, pairs of targets, and lambda."""
     if alpha > 0:
         lam = np.random.beta(alpha, alpha)
@@ -208,7 +190,7 @@ lrs = []  # track learning rate per epoch
 scaler = torch.amp.GradScaler('cuda')
 
 for epoch in range(1, EPOCHS + 1):
-    if epoch == 6:
+    if epoch == 10:
       for p in model.parameters():
           p.requires_grad = True
       for g in optimizer.param_groups:
