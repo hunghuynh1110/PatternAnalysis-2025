@@ -106,17 +106,18 @@ def get_loaders(data_root, batch_size=16, val_fraction=0.1, seed=42):
 
     # Define transforms
     train_tf = transforms.Compose([
-        transforms.RandomResizedCrop(IMAGE_SIZE, scale=(0.80, 1.0)),   # maybe slightly larger scale
+        transforms.RandomResizedCrop(IMAGE_SIZE, scale=(0.80,1.0)),
         transforms.RandomHorizontalFlip(p=0.5),
-        transforms.RandomVerticalFlip(p=0.2),                        # add vertical flip if valid
-        transforms.RandomRotation(degrees=15),                        # more rotation
+        transforms.RandomVerticalFlip(p=0.2),
         transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05),
-        transforms.RandomAffine(degrees=0, translate=(0.05, 0.05), scale=(0.9,1.1), shear=5),
-        transforms.GaussianBlur(kernel_size=(3,3), sigma=(0.1,1.0)),  # blur to simulate artefacts
+        transforms.RandomRotation(degrees=15),
+        transforms.RandomAffine(degrees=0, translate=(0.05,0.05), scale=(0.9,1.1), shear=5),
+        transforms.GaussianBlur(kernel_size=(3,3), sigma=(0.1,1.0)),
+        transforms.RandAugment(num_ops=2, magnitude=9),        # ← RandAugment insertion
         transforms.ToTensor(),
         PerImageZScore(),
-        AddGaussianNoise(0., 0.02),                                   # increase noise magnitude slightly
-        transforms.RandomErasing(p=0.3, scale=(0.02, 0.20), ratio=(0.3,3.0)),
+        AddGaussianNoise(0., 0.02),
+        transforms.RandomErasing(p=0.3, scale=(0.02,0.20), ratio=(0.3,3.0)),
         transforms.Normalize(MEAN, STD)
     ])
     
