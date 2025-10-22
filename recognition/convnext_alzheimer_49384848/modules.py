@@ -173,7 +173,11 @@ class ConvNeXtMRI(nn.Module):
             for param in self.stages[i].parameters():
                 param.requires_grad = False
         print(f"🔒 Froze first {n} stage(s)")
-        
+    
+    def set_drop_path_rate(self, rate):
+        for m in self.modules():
+            if hasattr(m, 'drop_path_rate'):
+                m.drop_path_rate = rate
         
         
         
