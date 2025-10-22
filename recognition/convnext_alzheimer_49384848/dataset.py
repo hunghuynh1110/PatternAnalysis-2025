@@ -103,7 +103,7 @@ def get_loaders(data_root, batch_size=16, val_fraction=0.1, seed=42):
     Build train / val / test DataLoaders assuming:
       data_root/train/{AD, NC}, data_root/test/{AD, NC}
     """
-
+ 
     # Define transforms
     train_tf = transforms.Compose([
         transforms.RandomResizedCrop(IMAGE_SIZE, scale=(0.80,1.0)),
