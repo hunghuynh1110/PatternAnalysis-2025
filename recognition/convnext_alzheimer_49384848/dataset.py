@@ -113,7 +113,7 @@ def get_loaders(data_root, batch_size=16, val_fraction=0.1, seed=42):
         transforms.RandomRotation(degrees=15),
         transforms.RandomAffine(degrees=0, translate=(0.05,0.05), scale=(0.9,1.1), shear=5),
         transforms.GaussianBlur(kernel_size=(3,3), sigma=(0.1,1.0)),
-        transforms.RandAugment(num_ops=2, magnitude=9),        # ← RandAugment insertion
+        transforms.RandAugment(num_ops=9, magnitude=5),        # ← RandAugment insertion
         transforms.ToTensor(),
         PerImageZScore(),
         AddGaussianNoise(0., 0.02),
