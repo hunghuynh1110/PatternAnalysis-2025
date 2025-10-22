@@ -105,28 +105,35 @@ def get_loaders(data_root, batch_size=16, val_fraction=0.1, seed=42):
     """
  
     # Define transforms
+    
     train_tf = transforms.Compose([
-        transforms.RandomResizedCrop(IMAGE_SIZE, scale=(0.80,1.0)),
+        transforms.Grayscale(num_output_channels=3),    # only if grayscale inputs
+        transforms.RandomResizedCrop(IMAGE_SIZE, scale=(0.80, 1.0)),
         transforms.RandomHorizontalFlip(p=0.5),
         transforms.RandomVerticalFlip(p=0.2),
-        # transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05),
         transforms.RandomRotation(degrees=15),
-        transforms.RandomAffine(degrees=0, translate=(0.05,0.05), scale=(0.9,1.1), shear=5),
-        transforms.GaussianBlur(kernel_size=(3,3), sigma=(0.1,1.0)),
-        # transforms.RandAugment(num_ops=9, magnitude=5),        # ← RandAugment insertion
+        transforms.RandomAffine(degrees=0, translate=(0.05, 0.05),
+                                scale=(0.9, 1.1), shear=5),
+        transforms.GaussianBlur(kernel_size=(3, 3), sigma=(0.1, 1.0)),
         transforms.ToTensor(),
-        # PerImageZScore(),
         AddGaussianNoise(0., 0.02),
         transforms.RandomErasing(p=0.25),
         transforms.Normalize(MEAN, STD)
     ])
-    
+
     val_tf = transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(IMAGE_SIZE),
+        transforms.Grayscale(num_output_channels=3),
+        transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),    # match training size
         transforms.ToTensor(),
-        # PerImageZScore(),
-        transforms.Normalize(MEAN,STD)
+        transforms.Normalize(MEAN, STD)
+    ])
+    
+        # --- Test Transform (identical to val_tf for consistency) ---
+    test_tf = transforms.Compose([
+        transforms.Grayscale(num_output_channels=3),
+        transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),   # deterministic resize
+        transforms.ToTensor(),
+        transforms.Normalize(MEAN, STD)
     ])
 
     # Load full training dataset
@@ -156,7 +163,7 @@ def get_loaders(data_root, batch_size=16, val_fraction=0.1, seed=42):
     if not os.path.isdir(test_root):
         # fallback if test folder missing
         test_root = train_root
-    test_ds = MRIDataset2D(test_root, CLASSES, transform=val_tf)
+    test_ds = MRIDataset2D(test_root, CLASSES, transform=test_tf)
 
     # Create DataLoaders
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  num_workers=NUM_WORKER, pin_memory=True)

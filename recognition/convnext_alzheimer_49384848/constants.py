@@ -1,5 +1,5 @@
 # constants.py
-IMAGE_SIZE = 224
+IMAGE_SIZE = 384
 CLASSES = ['AD', 'NC']
 IMG_EXTS = ('.png', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff')
 MEAN = [0.1115, 0.1115, 0.1115]
