@@ -7,7 +7,7 @@ Original file is located at
     https://colab.research.google.com/drive/13rE65-jYaDGdycBa34JeFZcoRF9qA8Ss
 """
 
-EPOCHS = 300
+EPOCHS = 400
 DATA_ROOTs = "/content/data/AD_NC"
 BATCH_SIZE = 512
 LR = 1e-3
@@ -22,8 +22,8 @@ drive.mount('/content/gdrive')
 # --- THAY ĐỔI ĐƯỜNG DẪN TẠI ĐÂY ---
 # Đổi tên và đường dẫn file zip project (Bây giờ là 'Pattern.zip')
 # LƯU Ý: Tên file trên Drive có phân biệt chữ hoa/thường. Chúng ta sẽ thử cả hai trường hợp.
-project_zip_path_caps = '/content/gdrive/MyDrive/Pattern.zip'
-project_zip_path_lower = '/content/gdrive/MyDrive/pattern.zip'
+project_zip_path_caps = '/content/gdrive/MyDrive/Pattern248.zip'
+project_zip_path_lower = '/content/gdrive/MyDrive/pattern248.zip'
 # Đường dẫn file dữ liệu (Không thay đổi)
 data_zip_path = '/content/gdrive/MyDrive/AD_NC.zip'
 
@@ -140,7 +140,7 @@ swa_scheduler = SWALR(optimizer, swa_lr=1e-4)
 # Schedule variables for augmentation + drop-path
 total_epochs = EPOCHS
 explore_end_epoch    = int(total_epochs * 0.5)   # e.g. first 50%
-transition_end_epoch = int(total_epochs * 0.8) # next ~33%
+transition_end_epoch = int(total_epochs * 0.75) # next ~33%
 
 mixup_alpha_init      = 0.8
 cutmix_alpha_init     = 1.0
@@ -200,6 +200,10 @@ def cutmix_data(x, y, alpha=1.0):
 
 # (Continue with training loop…)
 print("🔹 Training started ...")
+best_test_acc = -1.0           # global tracker
+best_test_acc_swa = -1.0       # track SWA separately
+use_swa_every = 1              # eval SWA each epoch in SWA phase
+
 best_val_acc = 0.0
 history = {'train_loss': [], 'val_loss': [], 'train_acc': [], 'val_acc': []}
 epochs = range(1, EPOCHS + 1)
@@ -223,7 +227,7 @@ for epoch in range(1, EPOCHS + 1):
         progress = (epoch - explore_end_epoch) / float(transition_end_epoch - explore_end_epoch)
         mixup_prob   = mixup_prob_init * (1.0 - 0.5 * progress)       # 1.0 → 0.5
         mixup_alpha  = mixup_alpha_init * (1.0 - 0.8 * progress)      # 0.8 → 0.32
-        cutmix_alpha = cutmix_alpha_init * (1.0 - 0.8 * progress)     # 1.0 → 0.4
+        cutmix_alpha = cutmix_alpha_init * (1.0 - 0.7 * progress)     # 1.0 → 0.4
         drop_path_rate_current = drop_path_rate_init * (1.0 - progress)
 
     elif epoch < swa_start_epoch:
@@ -342,6 +346,34 @@ for epoch in range(1, EPOCHS + 1):
     test_auc = roc_auc_score(all_labels, all_probs)
     print(f"🧠 [TEST] Epoch {epoch}: Acc={test_acc:.2f}%, AUC={test_auc:.3f}")
 
+    # --- SWA evaluation & saving (only after swa_start_epoch)
+    if epoch >= swa_start_epoch and (epoch - swa_start_epoch) % use_swa_every == 0:
+        swa_model.eval()
+        swa_test_correct, swa_test_total = 0, 0
+        swa_probs_all, swa_labels_all = [], []
+        with torch.no_grad():
+            for inputs, labels in test_loader:
+                inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+                outputs = swa_model(inputs)
+                probs = torch.softmax(outputs, dim=1)[:, 1]   # class-1 as positive
+                _, preds = outputs.max(1)
+                swa_test_total += labels.size(0)
+                swa_test_correct += preds.eq(labels).sum().item()
+                swa_probs_all.extend(probs.cpu().numpy())
+                swa_labels_all.extend(labels.cpu().numpy())
+
+        from sklearn.metrics import roc_auc_score
+        swa_test_acc = 100.0 * swa_test_correct / swa_test_total
+        swa_test_auc = roc_auc_score(swa_labels_all, swa_probs_all)
+        print(f"🧠 [TEST-SWA] Epoch {epoch}: Acc={swa_test_acc:.2f}%, AUC={swa_test_auc:.3f}")
+        with open('training_log_SWA.txt', 'a') as f:
+            f.write(f"[TEST] Epoch {epoch}: Acc={swa_test_acc:.2f}%, AUC={swa_test_auc:.3f}\n")
+
+        if swa_test_acc > best_test_acc_swa:
+            best_test_acc_swa = swa_test_acc
+            torch.save(swa_model.state_dict(), 'best_model_test_acc_swa.pth')
+            print("⭐ New best SWA test accuracy — saved 'best_model_test_acc_swa.pth'")
+
     # Log results
     with open('training_log.txt', 'a') as f:
         f.write(f"[TEST] Epoch {epoch}: Acc={test_acc:.2f}%, AUC={test_auc:.3f}\n")
@@ -365,7 +397,7 @@ for epoch in range(1, EPOCHS + 1):
     if test_acc >= 80.0:
         torch.save(model.state_dict(), 'best_model_pass_test.pth')
         print(f"🏁 Test accuracy reached {test_acc:.2f}% — model saved as 'best_model_pass_test.pth'")
-
+        break
 
 
     # --- OPTIONAL: Validation threshold tuning ---
@@ -417,6 +449,10 @@ for epoch in range(1, EPOCHS + 1):
     current_lr = optimizer.param_groups[0]['lr']
     lrs.append(current_lr)
     print(f"Current LR after epoch {epoch}: {current_lr:.6f}")
+
+torch.save(swa_model.state_dict(), 'swa_final.pth')
+print(f"🏁 Final SWA best test accuracy: {best_test_acc_swa:.2f}%")
+print("💾 Saved final SWA weights to 'swa_final.pth'")
 
 """# Plot training curves"""
 
@@ -676,7 +712,7 @@ import os
 drive.mount('/content/drive')
 
 # 2️⃣ Choose where to save your results on Drive
-SAVE_DIR = '/content/drive/MyDrive/convnext_results_backup'
+SAVE_DIR = '/content/drive/MyDrive/248_450epochs_3e-3'
 os.makedirs(SAVE_DIR, exist_ok=True)
 
 # 3️⃣ List all result files, including the new ones
@@ -685,6 +721,7 @@ result_files = [
     'notetrain.ipynb',
     'best_model_test_acc.pth',
     'confusion_matrix.png',
+    'swa_model.pth',
     'lr_schedule.png',
     'training_curves.png',
     'training_history.csv',
