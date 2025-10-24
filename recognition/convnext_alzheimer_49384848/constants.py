@@ -18,7 +18,9 @@ EPOCHS     = 5
 LR         = 4e-3
 WD         = 0.1
 
-DATA_ROOT = './recognition/convnext_alzheimer_49384848/AD_NC'
+# DATA_ROOT = './recognition/convnext_alzheimer_49384848/AD_NC'
+
+DATA_ROOT = "recognition/convnext_alzheimer_49384848/AD_NC"
 
 NUM_CLASSES   = 2
 DROP_PATH_RATE = 0.25  # for example, maybe 0.1 for tiny model
