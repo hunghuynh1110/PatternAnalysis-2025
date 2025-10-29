@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 """Untitled6.ipynb
 
@@ -15,14 +16,21 @@ import torch.nn as nn
 from torch.optim.swa_utils import AveragedModel
 from sklearn.metrics import roc_auc_score, classification_report, balanced_accuracy_score
 
-# --- CONSTANTS (Remain at top level) ---
-EPOCHS = 400
-BATCH_SIZE = 512
-LR = 1e-3
-WD = 0.05
-DROP_PATH_RATE = 0.1
-NUM_CLASSES = 2 # Inferred from 'AD' and 'NC'
 
+# --- Visualization / Projection (UMAP with t-SNE fallback) ---
+try:
+    import umap
+    _HAS_UMAP = True
+except Exception:
+    _HAS_UMAP = False
+import matplotlib.pyplot as plt
+
+from constants import (
+    DEVICE_MPS, DEVICE_CUDA, DEVICE_CPU, EPOCHS,
+    DATA_ROOT, BATCH_SIZE, LR, SWA_LR,
+    WD, DROP_PATH_RATE,
+    NUM_CLASSES
+)
 # --- LOCAL IMPORTS (Remain at top level) ---
 try:
     from modules import ConvNeXtMRI
@@ -31,6 +39,9 @@ except ImportError:
     print("❌ Error: Make sure 'modules.py' and 'dataset.py' are in the same directory.")
     print("   (Or that they are in the 'recognition/convnext_alzheimer_49384848' directory)")
     exit()
+    
+DATA_ROOT = "/content/data/AD_NC"
+
 
 # === 4. Define Model Architecture (Remain at top level) ===
 # This MUST match the architecture used for training
@@ -88,13 +99,99 @@ def evaluate_model(model_to_test, test_loader, DEVICE, model_name="Model"):
     except Exception:
         pass
 
+# === Feature extraction & projection helpers ===
+def _find_last_linear(m: nn.Module):
+    """Return the last nn.Linear in the model (assumed classifier)."""
+    last = None
+    for module in m.modules():
+        if isinstance(module, nn.Linear):
+            last = module
+    return last
+
+@torch.no_grad()
+def collect_embeddings(model_to_test, data_loader, device):
+    """
+    Collect one embedding per sample from the penultimate layer.
+    If a final Linear is found, capture its *input* via a forward hook;
+    otherwise fall back to using logits as features.
+    Returns: (embeddings [N,D], labels [N])
+    """
+    model_to_test.eval()
+    last_linear = _find_last_linear(model_to_test)
+    captured = []
+    handle = None
+    if last_linear is not None:
+        def _hook(module, inputs, output):
+            captured.append(inputs[0].detach().cpu())
+        handle = last_linear.register_forward_hook(_hook)
+
+    feats, lbls = [], []
+    for x, y in data_loader:
+        x = x.to(device)
+        y = y.to(device)
+        out = model_to_test(x)  # triggers hook if present
+        if last_linear is not None:
+            feats.append(captured.pop(0))
+        else:
+            feats.append(out.detach().cpu())
+        lbls.append(y.detach().cpu())
+
+    if handle is not None:
+        handle.remove()
+
+    feats = torch.cat(feats, dim=0).numpy()
+    lbls = torch.cat(lbls, dim=0).numpy()
+    return feats, lbls
+
+def project_and_plot(embeddings, labels, out_path,
+                     title="UMAP Projection of Test Set Feature Embeddings"):
+    """
+    Project embeddings to 2D (UMAP; t-SNE fallback) and save a labeled scatter.
+    Also saves the raw 2D coordinates and labels as an .npz next to the image.
+    """
+    method = "UMAP"
+    try:
+        if _HAS_UMAP:
+            reducer = umap.UMAP(n_components=2, random_state=42)
+            coords = reducer.fit_transform(embeddings)
+        else:
+            raise ImportError
+    except Exception:
+        from sklearn.manifold import TSNE
+        reducer = TSNE(n_components=2, random_state=42, init="pca", learning_rate="auto")
+        coords = reducer.fit_transform(embeddings)
+        method = "t-SNE (fallback)"
+
+    x, y = coords[:, 0], coords[:, 1]
+    labels = np.asarray(labels)
+
+    plt.figure(figsize=(10, 7))
+    for cls_val, name in [(0, "AD"), (1, "NC")]:
+        mask = labels == cls_val
+        plt.scatter(x[mask], y[mask], s=12, alpha=0.7, label=name)
+
+    plt.title(title)
+    plt.xlabel(f"{method}-1")
+    plt.ylabel(f"{method}-2")
+    plt.legend(title="Label")
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=220)
+    plt.close()
+
+    # Save raw coordinates & labels for reproducibility
+    np.savez(os.path.splitext(out_path)[0] + ".npz",
+             coords=coords, labels=labels, method=method)
+    print(f"📊 Saved projection plot to: {out_path}")
+
+
 from constants import DATA_ROOT
 # === FIX 1: Wrap all executable code in __name__ == '__main__' ===
 if __name__ == '__main__':
 
     # === 1. Configuration ===
     MODEL_SUBFOLDER = "recognition/convnext_alzheimer_49384848"
-
+    os.makedirs(MODEL_SUBFOLDER, exist_ok=True)
+    
     print(f"Data root set to: {DATA_ROOT}")
     if not os.path.exists(DATA_ROOT):
         print(f"⚠️ Warning: Data directory not found at {DATA_ROOT}")
@@ -123,7 +220,7 @@ if __name__ == '__main__':
         exit()
 
     # === 6. Load and Test 'best_model_test_acc.pth' ===
-    model_path = os.path.join(MODEL_SUBFOLDER, 'best_model.pth')
+    model_path = os.path.join('best_model.pth')
 
     if not os.path.exists(model_path):
         print(f"File not found: {model_path}")
@@ -136,15 +233,22 @@ if __name__ == '__main__':
             
             # Pass test_loader and DEVICE as arguments
             evaluate_model(model, test_loader, DEVICE, f"Best Model ({os.path.basename(model_path)})")
-
+            # --- UMAP projection of test-set embeddings (standard model) ---
+            try:
+                emb, y_true = collect_embeddings(model, test_loader, DEVICE)
+                umap_png = os.path.join(MODEL_SUBFOLDER, "umap_test_embeddings.png")
+                project_and_plot(emb, y_true, umap_png)
+            except Exception as e:
+                print(f"⚠️ Skipped UMAP/TSNE projection for standard model due to error: {e}")
+                
         except Exception as e:
             print(f"❌ Error loading {model_path}: {e}")
             print("Ensure 'modules.py' and model definition match the saved weights.")
     else:
-        print(f"⚠️ Could not find {model_path} or {fallback_model_path}. Skipping standard model test.")
-
-    # === 7. SWA (Temporarily Disabled) ===
-    swa_model_path = os.path.join(MODEL_SUBFOLDER, 'swa_model.pth')
+        print(f"⚠️ Could not find {model_path}. Skipping standard model test.")
+    
+    # === 7. SWA  ===
+    swa_model_path = os.path.join( 'swa_model.pth')
     if os.path.exists(swa_model_path):
         try:
             base_model_for_swa = create_model() # Don't move to device yet
