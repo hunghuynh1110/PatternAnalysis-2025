@@ -18,6 +18,7 @@ Author: s4938484 - Gia Hung Huynh
     - [Pre-processing Steps](#pre-processing-steps)
     - [Data Splits](#data-splits)
   - [Training Process](#training-process)
+      - [Stochastic Weight Averaging (SWA)](#stochastic-weight-averaging-swa)
   - [Result](#result)
   - [Usage](#usage)
     - [Clone the repository](#clone-the-repository)
@@ -115,7 +116,7 @@ Multiple ConvNeXtBlocks are sequentially stacked to form ConvNeXt stages. Betwee
 
 ### Overview 
 
-The dataset used in this project is a subset of the **ADNI (Alzheimer’s Disease Neuroimaging Initiative)** MRI collection, provided by UQ via rangpur. 
+The dataset used in this project is a subset of the **ADNI (Alzheimer’s Disease Neuroimaging Initiative)** MRI collection, provided by UQ via rangpur. Or can be downloaded via [this](https://drive.google.com/file/d/1BJsYNkdV8fqUY7FWKzhUvDBGIzyyLZZd/view?usp=sharing)
 
 Each image in the dataset is grayscale and have a resolution of `256 x 240` pixels. The filenames follow the format `patientID_index.png` where `patientID` identifies the patient and `index` is the image number.
 
