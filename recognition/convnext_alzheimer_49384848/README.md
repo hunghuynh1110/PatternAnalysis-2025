@@ -62,7 +62,7 @@ The ConvNeXt Block architecture is shown in [Figure 1](#convnext-block).
 
 ![ConvNeXt Block Architecture](Images/Report/ConvNextBlock.jpg)
 
-Figure 1. ConvNeXt block architecture, adapted from Liu et al. (2022) [[5]](#convnext).
+Figure 1. ConvNeXt block architecture, adapted from Liu et al. (2022) [[4]](#convnext).
 
 
 
@@ -74,7 +74,7 @@ The original ConvNeXt architecture is shown in [Figure 2](#convnext-structure) .
 
 ![ConvNeXt Architecture](images/report/ConvNeXt-structure.webp)
 
-Figure 2. ConvNeXt architecture, adapted from GeeksforGeeks [[3]](#convnext-gfg).
+Figure 2. ConvNeXt architecture, adapted from GeeksforGeeks [[2]](#convnext-gfg).
 
 In the original ConvNeXt, LayerNorm is used instead of BatchNorm but due to the small dataset at training time, BatchNorm has proven to be more suitable
 
@@ -91,7 +91,7 @@ Multiple ConvNeXtBlocks are sequentially stacked to form ConvNeXt stages. Betwee
 
 - **Input modality:** MRI slices are converted to grayscale and replicated to 3 channels to match ConvNeXt stem while keep the structure unchanged.
 - **Augmentations for robustness:** Moderate geometric and photometric transforms
-- **Optimization choices:** BN, LayerScale, DropPath are tuned for small dataset. schedule MixUp/CutMix are used during early/mid training has proven be of great benefit [[9]](#schedule-cutmix-mixup)
+- **Optimization choices:** BN, LayerScale, DropPath are tuned for small dataset. schedule MixUp/CutMix are used during early/mid training has proven be of great benefit [[8]](#schedule-cutmix-mixup)
 
 
 
@@ -153,7 +153,7 @@ All MRI images are preprocessed before training. Images are resized to 224 x 224
 7.	**Gaussian Blur**: lightly blurs with random strength to build resilience to focus/quality variations.
 8.	**To Tensor**: converts the PIL image to a PyTorch tensor scaled to [0, 1] for model input.
 9.	**Gaussian Noise**: adds low-level random noise to improve robustness to sensor noise.
-10. **Random Erasing** [[8]](#random-erasing) (p=0.25): masks a random patch to encourage occlusion tolerance and feature reliance following the ConvNeXt Paper [[[5]]] .
+10. **Random Erasing** [[7]](#random-erasing) (p=0.25): masks a random patch to encourage occlusion tolerance and feature reliance following the ConvNeXt Paper [[[4]]] .
 11. **Normalize** (mean/std): standardizes channels for stable training and faster convergence.
 
 
@@ -167,13 +167,13 @@ This split ensures that the model’s generalisation is evaluated on entirely un
 ## Training Process
 
 - The model was trained on the ADNI dataset using PyTorch framework. The model was trained for 400 epochs with early stopping based on validation loss to prevent overfitting. 
-- The AdamW optimizer was used to improve training stability and reduce overfitting through weight decay. Regularization schemes such as Label Smoothing [[7]](#label-smoothing) and Drop Path [[4]](#drop-path) were used to improve generalization.
-- Schedule CutMix and MixUp were also used during training to help preven overfitting and increase overall generalization [[9]](#schedule-cutmix-mixup)
+- The AdamW optimizer was used to improve training stability and reduce overfitting through weight decay. Regularization schemes such as Label Smoothing [[6]](#label-smoothing) and Drop Path [[3]](#drop-path) were used to improve generalization.
+- Schedule CutMix and MixUp were also used during training to help preven overfitting and increase overall generalization [[8]](#schedule-cutmix-mixup)
 
 
 #### Stochastic Weight Averaging (SWA)
 
-We adopt **Stochastic Weight Averaging (SWA)** in the final phase of training to improve generalization. SWA maintains a running average of model weights sampled near the end of training (here: starting at **80%** of epochs) and evaluates the averaged model at test time. This simple change nudges the solution toward a **wider/flatter optimum**, which is linked to better out-of-distribution robustness and smoother loss/accuracy curves [[10]](#swa-izmailov), [[12]](#swa-blog). In our PyTorch implementation we use `torch.optim.swa_utils.AveragedModel` and perform a one-pass **BatchNorm statistics update** with `torch.optim.swa_utils.update_bn(train_loader, swa_model)` before saving/evaluating the SWA weights [[11]](#swa-averagedmodel).
+We adopt **Stochastic Weight Averaging (SWA)** in the final phase of training to improve generalization. SWA maintains a running average of model weights sampled near the end of training (here: starting at **80%** of epochs) and evaluates the averaged model at test time. This simple change nudges the solution toward a **wider/flatter optimum**, which is linked to better out-of-distribution robustness and smoother loss/accuracy curves [[9]](#swa-izmailov), [[11]](#swa-blog). In our PyTorch implementation we use `torch.optim.swa_utils.AveragedModel` and perform a one-pass **BatchNorm statistics update** with `torch.optim.swa_utils.update_bn(train_loader, swa_model)` before saving/evaluating the SWA weights [[10]](#swa-averagedmodel).
 
 The main hyperparameters used in the training process are summarized in [Table 2](#hyperparameters)
 
@@ -302,8 +302,10 @@ LEARNING_RATE = 4e-3
 BATCH_SIZE = 256
 LABEL_SMOOTHING = 0.1
 ```
-
+User also has to check `DATA_ROOT` to match actual paths because training was only done on collab and only compatible with `cuda`
 ### Train the Model
+
+For a more consistent result, user can set seed for reproduction [[12]](#reproducibility)
 
 Run the training pipeline to start training the model
 ```
@@ -321,24 +323,24 @@ This will:
 
 <a id="adni-link"></a>[1] Alzheimer's Disease Neuroimaging Initiative (ADNI). [https://adni.loni.usc.edu](https://adni.loni.usc.edu/)
 
-<a id="rand-augment"></a>[2] Cubuk, E. D., Zoph, B., Shlens, J., & Le, Q. V. (2020). *RandAugment: Practical automated data augmentation with a reduced search space*. In CVPR. [https://arxiv.org/abs/1909.13719](https://arxiv.org/abs/1909.13719)
 
-<a id="convnext-gfg"></a>[3] GeeksforGeeks. *ConvNeXt Architecture Overview*. Available at: [https://www.geeksforgeeks.org/computer-vision/convnext/](https://www.geeksforgeeks.org/computer-vision/convnext/)
+<a id="convnext-gfg"></a>[2] GeeksforGeeks. *ConvNeXt Architecture Overview*. Available at: [https://www.geeksforgeeks.org/computer-vision/convnext/](https://www.geeksforgeeks.org/computer-vision/convnext/)
 
-<a id="drop-path"></a>[4] Huang, G., Liu, Z., van der Maaten, L., & Weinberger, K. Q. (2017). *Densely Connected Convolutional Networks (DenseNet)*. In CVPR. [https://arxiv.org/abs/1608.06993](https://arxiv.org/abs/1608.06993)
+<a id="drop-path"></a>[3] Huang, G., Liu, Z., van der Maaten, L., & Weinberger, K. Q. (2017). *Densely Connected Convolutional Networks (DenseNet)*. In CVPR. [https://arxiv.org/abs/1608.06993](https://arxiv.org/abs/1608.06993)
 
-<a id="convnext"></a>[5] Liu, Z., Mao, H., Wu, C. Y., Feichtenhofer, C., Darrell, T., & Xie, S. (2022). *A ConvNet for the 2020s*. In CVPR. [https://arxiv.org/abs/2201.03545](https://arxiv.org/abs/2201.03545)
+<a id="convnext"></a>[4] Liu, Z., Mao, H., Wu, C. Y., Feichtenhofer, C., Darrell, T., & Xie, S. (2022). *A ConvNet for the 2020s*. In CVPR. [https://arxiv.org/abs/2201.03545](https://arxiv.org/abs/2201.03545)
 
-<a id="batchnorm"></a>[6] Wu, Y., & Johnson, J. (2021). *Rethinking "Batch" in BatchNorm*. [https://arxiv.org/abs/2105.07576](https://arxiv.org/abs/2105.07576)
 
-<a id="label-smoothing"></a>[7] Szegedy, C., Vanhoucke, V., Ioffe, S., Shlens, J., & Wojna, Z. (2016). *Rethinking the Inception Architecture for Computer Vision*. In CVPR. [https://arxiv.org/abs/1512.00567](https://arxiv.org/abs/1512.00567)
+<a id="label-smoothing"></a>[6] Szegedy, C., Vanhoucke, V., Ioffe, S., Shlens, J., & Wojna, Z. (2016). *Rethinking the Inception Architecture for Computer Vision*. In CVPR. [https://arxiv.org/abs/1512.00567](https://arxiv.org/abs/1512.00567)
 
-<a id="random-erasing"></a>[8] Zhong, Z., Zheng, L., Kang, G., Li, S., & Yang, Y. (2020). *Random Erasing Data Augmentation*. In AAAI. [https://arxiv.org/abs/1708.04896](https://arxiv.org/abs/1708.04896)
+<a id="random-erasing"></a>[7] Zhong, Z., Zheng, L., Kang, G., Li, S., & Yang, Y. (2020). *Random Erasing Data Augmentation*. In AAAI. [https://arxiv.org/abs/1708.04896](https://arxiv.org/abs/1708.04896)
 
-<a id="schedule-cutmix-mixup"></a>[9] Liu, Z., Wang, Z., Guo, H., & Mao, Y. (2023). Over-Training with Mixup May Hurt Generalization. In ICLR 2023. https://arxiv.org/abs/2303.01475
+<a id="schedule-cutmix-mixup"></a>[8] Liu, Z., Wang, Z., Guo, H., & Mao, Y. (2023). Over-Training with Mixup May Hurt Generalization. In ICLR 2023. https://arxiv.org/abs/2303.01475
 
-<a id="swa-izmailov"></a>[10] Izmailov, P., Podoprikhin, D., Garipov, T., Vetrov, D., & Wilson, A. G. (2018). *Averaging Weights Leads to Wider Optima and Better Generalization*. In UAI 2018. [https://arxiv.org/abs/1803.05407](https://arxiv.org/abs/1803.05407)
+<a id="swa-izmailov"></a>[9] Izmailov, P., Podoprikhin, D., Garipov, T., Vetrov, D., & Wilson, A. G. (2018). *Averaging Weights Leads to Wider Optima and Better Generalization*. In UAI 2018. [https://arxiv.org/abs/1803.05407](https://arxiv.org/abs/1803.05407)
 
-<a id="swa-averagedmodel"></a>[11] PyTorch Team. (2024). *AveragedModel — `torch.optim.swa_utils`* (documentation). [https://docs.pytorch.org/docs/stable/generated/torch.optim.swa_utils.AveragedModel.html](https://docs.pytorch.org/docs/stable/generated/torch.optim.swa_utils.AveragedModel.html)
+<a id="swa-averagedmodel"></a>[10] PyTorch Team. (2024). *AveragedModel — `torch.optim.swa_utils`* (documentation). [https://docs.pytorch.org/docs/stable/generated/torch.optim.swa_utils.AveragedModel.html](https://docs.pytorch.org/docs/stable/generated/torch.optim.swa_utils.AveragedModel.html)
 
-<a id="swa-blog"></a>[12] PyTorch Team. (2020). *Stochastic Weight Averaging in PyTorch* (blog). [https://pytorch.org/blog/stochastic-weight-averaging-in-pytorch/](https://pytorch.org/blog/stochastic-weight-averaging-in-pytorch/)
+<a id="swa-blog"></a>[11] PyTorch Team. (2020). *Stochastic Weight Averaging in PyTorch* (blog). [https://pytorch.org/blog/stochastic-weight-averaging-in-pytorch/](https://pytorch.org/blog/stochastic-weight-averaging-in-pytorch/)
+
+<a id="reproducibility"></a>[12] PyTorch Team. Reproducibility — PyTorch Documentation. https://docs.pytorch.org/docs/stable/notes/randomness.html. 
