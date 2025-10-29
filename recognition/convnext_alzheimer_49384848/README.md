@@ -10,10 +10,9 @@ Author: s4938484 - Gia Hung Huynh
   - [Introduction](#introduction)
   - [Model Architecture](#model-architecture)
     - [ConvNeXtBlock Components](#convnextblock-components)
-    - [Stacking and Stages](#stacking-and-stages)
-    - [Design Motivations](#design-motivations)
+    - [The ConvNeXt architecture](#the-convnext-architecture)
     - [Adaptation for ADNI Dataset](#adaptation-for-adni-dataset)
-    - [Comparison with Pretrained ConvNeXt (TorchVision)](#comparison-with-pretrained-convnext-torchvision)
+    - [Summary of Differences from Pretrained ConvNeXt (TorchVision)](#summary-of-differences-from-pretrained-convnext-torchvision)
   - [Data Pre-processing and Dataset Splits](#data-pre-processing-and-dataset-splits)
     - [Overview](#overview)
     - [Pre-processing Steps](#pre-processing-steps)
@@ -26,32 +25,16 @@ Author: s4938484 - Gia Hung Huynh
     - [Directory structure](#directory-structure)
     - [Adjust Hyperparameters](#adjust-hyperparameters)
     - [Train the Model](#train-the-model)
-  - [Training Setup](#training-setup)
-    - [Optimizer and Regularization](#optimizer-and-regularization)
-    - [Drop Path Regularization](#drop-path-regularization)
-    - [Gradient Clipping](#gradient-clipping)
-    - [AMP (Mixed Precision)](#amp-mixed-precision)
-    - [Validation Optimization (FP16 inference)](#validation-optimization-fp16-inference)
-    - [Checkpointing and Logging](#checkpointing-and-logging)
-    - [Learning Rate Visualization](#learning-rate-visualization)
-    - [Training Stability Enhancements](#training-stability-enhancements)
-  - [Evaluation and Results](#evaluation-and-results)
-  - [How to run](#how-to-run)
-  - [Dependencies](#dependencies)
-  - [Example Outputs](#example-outputs)
-  - [Reproducibility and Discussion](#reproducibility-and-discussion)
   - [References](#references)
-  - [References](#references-1)
 
 ## Introduction
 
 Alzheimer’s disease (AD) is a progressive neurodegenerative disorder characterized by structural brain changes visible in MRI scans.
 The goal of this project is to classify MRI brain slices from the ADNI dataset into Alzheimer’s Disease (AD) or Cognitively Normal (CN) categories.
 
-This project contributes to the open-source PatternAnalysis repository under the recognition branch.
-It aims to reproduce a clinically relevant classification model achieving a minimum test accuracy of 0.8, as required in the assessment specification
+This project goal is to classify between Alzheimer's Disease (AD) and Normal Control (NC) images in the Alzheimer's Disease Neuroimaging Initiative (ADNI) brain dataset [[1]](#adni-link) and contributes to the open-source PatternAnalysis repository under the recognition branch. The desired test accuracy is 0.8, as specified in the requirement.
 
-The model reaches a 0.81 accuracy on the ADNI test dataset
+The model reaches a 0.80933 accuracy on the ADNI test dataset
 
 
 
@@ -67,7 +50,12 @@ The model reaches a 0.81 accuracy on the ADNI test dataset
 
 ## Model Architecture
 
+
+
+### ConvNeXtBlock Components
+
 Our model employs a custom reimplementation of the ConvNeXt architecture, built from scatch and tweaked to better suit the characteristics of the ADNI dataset. At the core of this design is the ConvNeXtBlock, which integrates several key components inspired by both convolutional and transformer-based architectures.
+The ConvNeXt Block architecture is shown in [Figure 1](#convnext-block).
 
 <a id="convnext-block"></a>
 
@@ -75,44 +63,50 @@ Our model employs a custom reimplementation of the ConvNeXt architecture, built 
 
 Figure 1. ConvNeXt block architecture, adapted from Liu et al. (2022) [[5]](#convnext).
 
-### ConvNeXtBlock Components
 
-- **Depthwise Convolution:** Each block begins with a large-kernel (e.g., 7×7) depthwise convolution that captures extensive spatial context while maintaining computational efficiency by applying a separate convolution per input channel.
-- **Layer Normalization:** Following the depthwise convolution, LayerNorm is applied in a channel-last format to normalize feature activations, which stabilizes training and improves generalization.
-- **MLP (Multi-Layer Perceptron):** A two-layer fully connected feed-forward network with a GELU activation in between acts as a channel-wise MLP, inspired by Vision Transformer (ViT) designs, enabling complex feature transformations.
-- **LayerScale:** A learnable scaling parameter is applied to the MLP output to modulate residual branch contributions, helping to stabilize training in deep networks.
-- **DropPath (Stochastic Depth):** DropPath regularization randomly drops entire residual branches during training, acting as a form of structured dropout to enhance model robustness.
-- **Residual Connection:** The block incorporates a residual connection that sums the input with the transformed features, facilitating gradient flow and enabling deeper architectures.
 
-### Stacking and Stages
+### The ConvNeXt architecture
 
-Multiple ConvNeXtBlocks are sequentially stacked to form ConvNeXt stages. Between stages, progressive downsampling is performed using strided convolutions or patch merging layers to reduce spatial dimensions while increasing channel depth, enabling hierarchical representation learning similar to conventional CNNs.
+The original ConvNeXt architecture is shown in [Figure 2](#convnext-structure) .
 
-### Design Motivations
+<a id="convnext-structure"></a>
 
-This reimplementation draws on key design principles:
-- **Large-kernel Spatial Filtering:** The use of large depthwise convolutions captures broader spatial dependencies compared to small kernels, improving feature extraction for complex brain MRI slices.
-- **ViT-inspired MLP and LayerNorm:** Incorporating MLP blocks and LayerNorm layers introduces non-linear channel mixing and stable normalization, inspired by transformer architectures, enhancing representational capacity.
-- **LayerScale and DropPath:** These components improve training stability and generalization by modulating residual contributions and applying structured stochastic regularization.
+![ConvNeXt Architecture](images/report/ConvNeXt-structure.webp)
+
+Figure 2. ConvNeXt architecture, adapted from GeeksforGeeks [[3]](#convnext-gfg).
+
+In the original ConvNeXt, LayerNorm is used instead of BatchNorm but due to the small dataset at training time, BatchNorm has proven to be more suitable
+
+Multiple ConvNeXtBlocks are sequentially stacked to form ConvNeXt stages. Between stages, we downsample with BatchNorm2d, then a strided Conv2d (k=2,s=2). We halve spatial size and double channels to build a hierarchical representation, similar to conventional CNN pyramids
+
+- **Depthwise Convolution:** Eah block begins with a larger kernel of size 7x7, depthwise convolution to capture broad spatial context efficiently
+- **Batch Normalization:** After the depthwise convolution, we apply BatchNorm2d in NCHW, which stabilizes training without switching layouts
+- **Pointwise MLP (Multi-Layer Perceptron):** Two layer of 1x1 conv -> GELU -> 1x1 conv acts as a channel-wise MLP. Thus, enabling non-linear mixing.
+- **LayerScale:** A learnable per-channel scale that modulate the residual branch to boost optimization stability in deep networks
+- **DropPath (Stochastic Depth):** randomly drops entire residual branches during training. This structured dropout helps enhance model robustness.
+- **Residual Connection:** The block sums the input with the transformed features to preserve information and ease gradient flow.
 
 ### Adaptation for ADNI Dataset
 
-By reimplementing ConvNeXt from scratch, we tailor the architecture to the limited size and specific characteristics of the ADNI MRI dataset. This approach aims to improve training efficiency, interpretability, and potentially yield better generalization on the Alzheimer’s classification task compared to off-the-shelf pretrained models.
+- **Input modality:** MRI slices are converted to grayscale and replicated to 3 channels to match ConvNeXt stem while keep the structure unchanged.
+- **Augmentations for robustness:** Moderate geometric and photometric transforms
+- **Optimization choices:** BN, LayerScale, DropPath are tuned for small dataset. schedule MixUp/CutMix are used during early/mid training has proven be of great benefit [[9]](#schedule-cutmix-mixup)
 
 
 
-### Comparison with Pretrained ConvNeXt (TorchVision)
+
+### Summary of Differences from Pretrained ConvNeXt (TorchVision)
 
 | Aspect                      | Custom ConvNeXt Implementation                   | Pretrained ConvNeXt (TorchVision)                |
 |-----------------------------|-------------------------------------------------|--------------------------------------------------|
-| **Implementation**           | Built from scratch with custom blocks and layers, allowing fine-grained control over architecture details | Official PyTorch implementation with pretrained weights on ImageNet |
-| **Training Objectives**      | Designed specifically for Alzheimer’s classification with tailored loss functions and regularization | General-purpose ImageNet classification pretrained weights |
-| **Dataset Adaptation**       | Adapted to MRI brain slices with customized input preprocessing and augmentation strategies | Trained on natural images; requires fine-tuning for medical images |
-| **Flexibility**              | Full control over architecture modifications, normalization schemes, and regularization techniques | Limited flexibility; mainly fine-tuning pretrained backbone |
-| **Interpretability**         | Transparent design facilitates understanding of model behavior and modifications | Black-box pretrained model with limited interpretability |
-| **Optimization**             | Includes domain-specific optimizations like LayerScale and DropPath tailored to dataset characteristics | Standard training pipeline optimized for natural images |
+| **Implementation**           | From scratch blocks | Official PyTorch implementation with pretrained weights on ImageNet |
+| **Training Objectives**      | Alzheimer's (AD vs NC) with medical-specific regularization | General ImageNet classification |
+| **Dataset Adaptation**       | 3 channel grayscale replication, MRI-oriented augmentations | Trained on natural images; requires fine-tuning for medical images |
+| **Flexibility**              | Full control over layers/normalization/heads | Limited flexibility; mainly fine-tuning pretrained backbone |
+| **Interpretability**         | Transparent design  and logits-level evaluation | Depend on fine-tuning setup |
 
-The rationale behind choosing a full reimplementation over using the pretrained ConvNeXt from TorchVision is to gain complete control over the model architecture and training process. This enables better adaptation to the unique characteristics of the ADNI MRI dataset, allows incorporation of domain-specific regularization and normalization techniques, and improves interpretability of the model's inner workings. Such flexibility is critical for medical imaging tasks where pretrained models on natural images may not transfer optimally without extensive modification.
+**Rationale:** By reimplementing ConvNeXt from scratch,we have more control over normalization, block details and regularization tailored to ADNI, which then can transfer to natural image medical datasets more smoothly
+
 
 
 
@@ -158,7 +152,7 @@ All MRI images are preprocessed before training. Images are resized to 224 x 224
 7.	**Gaussian Blur**: lightly blurs with random strength to build resilience to focus/quality variations.
 8.	**To Tensor**: converts the PIL image to a PyTorch tensor scaled to [0, 1] for model input.
 9.	**Gaussian Noise**: adds low-level random noise to improve robustness to sensor noise.
-10. **Random Erasing** (p=0.25): masks a random patch to encourage occlusion tolerance and feature reliance following the ConvNeXt Paper [[[5]]] .
+10. **Random Erasing** [[8]](#random-erasing) (p=0.25): masks a random patch to encourage occlusion tolerance and feature reliance following the ConvNeXt Paper [[[5]]] .
 11. **Normalize** (mean/std): standardizes channels for stable training and faster convergence.
 
 
@@ -171,7 +165,14 @@ This split ensures that the model’s generalisation is evaluated on entirely un
 
 ## Training Process
 
-The model was trained on the ADNI dataset using PyTorch framework. The model was trained for 450 epochs with early stopping based on validation loss to prevent overfitting. The AdamW optimizer was used to improve training stability and reduce overfitting through weight decay. Regularization schemes such as Label Smoothing [[7]](#label-smoothing) and Stochastic Depth [[4]](#stochastic-depth) were used to improve generalization.
+- The model was trained on the ADNI dataset using PyTorch framework. The model was trained for 400 epochs with early stopping based on validation loss to prevent overfitting. 
+- The AdamW optimizer was used to improve training stability and reduce overfitting through weight decay. Regularization schemes such as Label Smoothing [[7]](#label-smoothing) and Drop Path [[4]](#drop-path) were used to improve generalization.
+- Schedule CutMix and MixUp were also used during training to help preven overfitting and increase overall generalization [[9]](#schedule-cutmix-mixup)
+
+
+#### Stochastic Weight Averaging (SWA)
+
+We adopt **Stochastic Weight Averaging (SWA)** in the final phase of training to improve generalization. SWA maintains a running average of model weights sampled near the end of training (here: starting at **80%** of epochs) and evaluates the averaged model at test time. This simple change nudges the solution toward a **wider/flatter optimum**, which is linked to better out-of-distribution robustness and smoother loss/accuracy curves [[10]](#swa-izmailov), [[12]](#swa-blog). In our PyTorch implementation we use `torch.optim.swa_utils.AveragedModel` and perform a one-pass **BatchNorm statistics update** with `torch.optim.swa_utils.update_bn(train_loader, swa_model)` before saving/evaluating the SWA weights [[11]](#swa-averagedmodel).
 
 The main hyperparameters used in the training process are summarized in [Table 2](#hyperparameters)
 
@@ -234,6 +235,14 @@ The confusion matrix for test results is shown in [Figure 4](#confusion-matrix).
 ![Confusion Matrix](Images/Report/confusion_matrix.png)
 
 Figure 4. Test Set Confusion Matrix
+
+The UMAP visualization in [Figure 5](#umap) shows separation between AD and NC embeddings. Even though the NC cluster is not as compact as AD, there are less overlaps of NC in AD than AD in NC. Indicating the model learned NC better.
+
+<a id="umap"></a>
+
+![UMAP](images/report/umap_test_embeddings.png)
+
+Figure 5. UMAP projection of test set feature embeddings.
 
 These results show that the model performs well overall, with particularly strong recall suggesting a good sensitiviy in detecting positive cases.
 
@@ -307,86 +316,6 @@ This will:
 - Save the best model checkpoint (`best_convnext.pth`, `swa_model`)
 - Generate training/validation loss plots and confusion matrices
 
-
-
-
-
-
-
-
-## Training Setup
-
-
-```
-  LR   |     /‾‾‾‾‾‾‾‾‾\
-       |    /           \
-       |---/-------------\------
-            Warm-up   Cosine decay
-                → Epochs →
-```
-A combined linear warm-up and cosine annealing learning rate schedule was used. The warm-up phase gradually increased the learning rate during the first epoch, stabilizing early optimization, followed by a smooth cosine decay to fine-tune convergence.
-
-Figure X. Learning rate schedule combining linear warm-up and cosine annealing. The initial warm-up stabilizes early training, while the cosine decay fine-tunes convergence.
-
-
-### Optimizer and Regularization
-
-- Optimizer: AdamW (lr = 1e-4, weight_decay = 1e-4)
-- Loss Function: CrossEntropy with label smoothing (ε = 0.1)
-- Regularization: Drop Path (stochastic depth) and gradient clipping (max-norm = 1.0)
-
-### Drop Path Regularization
-
-ConvNeXt employs stochastic depth (Drop Path) to randomly drop entire residual branches during training, improving ensemble-like regularization and robustness.
-
-### Gradient Clipping
-
-Gradient clipping was used (max-norm = 1.0) to stabilize training and prevent gradient explosion during backpropagation.
-
-### AMP (Mixed Precision)
-
-To accelerate training and reduce GPU memory usage, automatic mixed precision (AMP) was applied using PyTorch’s torch.cuda.amp. This approach leverages half-precision arithmetic on supported GPUs while maintaining numerical stability through gradient scaling, achieving faster convergence without accuracy degradation.
-
-Training was performed under automatic mixed precision (AMP) using torch.cuda.amp.autocast and GradScaler, achieving faster computation (~1.5–2× speedup) and lower GPU memory usage without accuracy loss.
-
-
-### Validation Optimization (FP16 inference)
-
-
-### Checkpointing and Logging
-
-The best model (based on validation accuracy) was saved as best_model.pth.
-Training progress and metrics were logged to training_log.txt, and all epoch histories were exported to training_history.csv.
-
-### Learning Rate Visualization
-
-Learning rate progression across epochs was plotted and saved as lr_schedule.png, providing a clear overview of the warm-up and cosine decay behavior.
-
-### Training Stability Enhancements
-
-To further stabilize training, the script enabled CuDNN benchmarking for optimal kernel selection on GPU:
-
-
-
-
-
-## Evaluation and Results
-
-
-## How to run
-
-
-## Dependencies
-
-
-## Example Outputs
-
-
-## Reproducibility and Discussion
-
-
-## References
-
 ## References
 
 <a id="adni-link"></a>[1] Alzheimer's Disease Neuroimaging Initiative (ADNI). [https://adni.loni.usc.edu](https://adni.loni.usc.edu/)
@@ -395,7 +324,7 @@ To further stabilize training, the script enabled CuDNN benchmarking for optimal
 
 <a id="convnext-gfg"></a>[3] GeeksforGeeks. *ConvNeXt Architecture Overview*. Available at: [https://www.geeksforgeeks.org/computer-vision/convnext/](https://www.geeksforgeeks.org/computer-vision/convnext/)
 
-<a id="stochastic-depth"></a>[4] Huang, G., Liu, Z., van der Maaten, L., & Weinberger, K. Q. (2017). *Densely Connected Convolutional Networks (DenseNet)*. In CVPR. [https://arxiv.org/abs/1608.06993](https://arxiv.org/abs/1608.06993)
+<a id="drop-path"></a>[4] Huang, G., Liu, Z., van der Maaten, L., & Weinberger, K. Q. (2017). *Densely Connected Convolutional Networks (DenseNet)*. In CVPR. [https://arxiv.org/abs/1608.06993](https://arxiv.org/abs/1608.06993)
 
 <a id="convnext"></a>[5] Liu, Z., Mao, H., Wu, C. Y., Feichtenhofer, C., Darrell, T., & Xie, S. (2022). *A ConvNet for the 2020s*. In CVPR. [https://arxiv.org/abs/2201.03545](https://arxiv.org/abs/2201.03545)
 
@@ -404,3 +333,11 @@ To further stabilize training, the script enabled CuDNN benchmarking for optimal
 <a id="label-smoothing"></a>[7] Szegedy, C., Vanhoucke, V., Ioffe, S., Shlens, J., & Wojna, Z. (2016). *Rethinking the Inception Architecture for Computer Vision*. In CVPR. [https://arxiv.org/abs/1512.00567](https://arxiv.org/abs/1512.00567)
 
 <a id="random-erasing"></a>[8] Zhong, Z., Zheng, L., Kang, G., Li, S., & Yang, Y. (2020). *Random Erasing Data Augmentation*. In AAAI. [https://arxiv.org/abs/1708.04896](https://arxiv.org/abs/1708.04896)
+
+<a id="schedule-cutmix-mixup"></a>[9] Liu, Z., Wang, Z., Guo, H., & Mao, Y. (2023). Over-Training with Mixup May Hurt Generalization. In ICLR 2023. https://arxiv.org/abs/2303.01475
+
+<a id="swa-izmailov"></a>[10] Izmailov, P., Podoprikhin, D., Garipov, T., Vetrov, D., & Wilson, A. G. (2018). *Averaging Weights Leads to Wider Optima and Better Generalization*. In UAI 2018. [https://arxiv.org/abs/1803.05407](https://arxiv.org/abs/1803.05407)
+
+<a id="swa-averagedmodel"></a>[11] PyTorch Team. (2024). *AveragedModel — `torch.optim.swa_utils`* (documentation). [https://docs.pytorch.org/docs/stable/generated/torch.optim.swa_utils.AveragedModel.html](https://docs.pytorch.org/docs/stable/generated/torch.optim.swa_utils.AveragedModel.html)
+
+<a id="swa-blog"></a>[12] PyTorch Team. (2020). *Stochastic Weight Averaging in PyTorch* (blog). [https://pytorch.org/blog/stochastic-weight-averaging-in-pytorch/](https://pytorch.org/blog/stochastic-weight-averaging-in-pytorch/)

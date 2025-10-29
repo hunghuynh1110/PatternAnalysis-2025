@@ -1,3 +1,23 @@
+"""
+modules.py
+Author: Gia Hung Huynh - 49384848
+Date: 30th October 2025
+Description:
+    BatchNorm-based ConvNeXt reimplementation (NCHW) tailored for MRI (ADNI) classification.
+
+Components:
+    - DropPath: Per-sample stochastic depth that randomly drops residual branches during training.
+    - ConvNeXtBlock: DWConv(7x7) → BatchNorm2d → 1x1 Conv → GELU → 1x1 Conv → optional LayerScale() → DropPath → Residual add.
+    - ConvNeXtStage: Optional downsampling followed by a stack of ConvNeXtBlocks.
+    - ConvNeXtMRI: Full model with a patchify stem (Conv2d k=4, s=4 + BatchNorm2d), four stages, global average pooling, BatchNorm1d,
+                   Dropout(0.4), and a linear classification head.
+
+Notes:
+    - Uses BatchNorm2d/BatchNorm1d throughout (not LayerNorm) to keep tensors in NCHW and work well with small/medium batch sizes.
+    - Applies a linear DropPath schedule across blocks via torch.linspace(0, drop_path_rate, sum(depths)).
+    - Utility: freeze_stages(n) to freeze the earliest n stages during fine-tuning.
+    - Defaults (depths/dims) can be overridden in the constructor to match different training scripts.
+"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
