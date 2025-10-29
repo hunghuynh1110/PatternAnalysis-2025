@@ -26,6 +26,7 @@ Author: s4938484 - Gia Hung Huynh
     - [Directory structure](#directory-structure)
     - [Adjust Hyperparameters](#adjust-hyperparameters)
     - [Train the Model](#train-the-model)
+  - [Testing/Predict](#testingpredict)
   - [References](#references)
 
 ## Introduction
@@ -296,7 +297,7 @@ convnext_alzheimer_49384848
 ### Adjust Hyperparameters
 Key hyperparameters such as batch size, learning rate, number of epochs, or label smoothing can be modified in constants.py.
 
-```
+```python
 EPOCHS = 450
 LEARNING_RATE = 4e-3
 BATCH_SIZE = 256
@@ -318,6 +319,13 @@ This will:
 - Train the ConvNeXt model.
 - Save the best model checkpoint (`best_convnext.pth`, `swa_model`)
 - Generate training/validation loss plots and confusion matrices
+
+## Testing/Predict
+
+Run the predict command
+```
+python predict.py
+```
 
 ## References
 
