@@ -1,7 +1,13 @@
 """
 dataset.py
-Dataset loader for the AD vs NC JPEG dataset
-Author: Hung Huynh (s4938484)
+Author: Gia Hung Huynh - 49384848
+Date: 18th October 2025
+Description:
+    Data loading utilities for the ADNI Alzheimer's dataset.
+    - Provides PyTorch DataLoader for training and testing.
+    - Splits train/validation by patient ID to prevent data leakage.
+    - Includes data transformations with augmentations for training.
+    - Supports grayscale-to-3-channel conversion, resizing, normalization.
 """
 
 import os

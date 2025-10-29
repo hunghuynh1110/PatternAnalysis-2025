@@ -1,11 +1,15 @@
 # constants.py
+
+DATA_ROOT = "./AD_NC"
+
+
 IMAGE_SIZE = 224
 CLASSES = ['AD', 'NC']
 IMG_EXTS = ('.png', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff')
 MEAN = [0.1115, 0.1115, 0.1115]
 STD  = [0.2186, 0.2186, 0.2186]
 
-NUM_WORKER = 4
+NUM_WORKER = 2
 
 # Device settings
 DEVICE_MPS = 'mps'
@@ -14,13 +18,11 @@ DEVICE_CPU  = 'cpu'
 
 # Data & training
 BATCH_SIZE = 512
-EPOCHS     = 5
-LR         = 4e-3
-WD         = 0.1
+EPOCHS     = 400
+LR         = 1e-3
+SWA_LR     = 1e-4
+WD         = 0.05
 
-# DATA_ROOT = './recognition/convnext_alzheimer_49384848/AD_NC'
-
-DATA_ROOT = "recognition/convnext_alzheimer_49384848/AD_NC"
 
 NUM_CLASSES   = 2
-DROP_PATH_RATE = 0.25  # for example, maybe 0.1 for tiny model
+DROP_PATH_RATE = 0.1  # for example, maybe 0.1 for tiny model

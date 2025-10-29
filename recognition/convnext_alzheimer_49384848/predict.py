@@ -17,14 +17,6 @@ from torch.optim.swa_utils import AveragedModel
 from sklearn.metrics import roc_auc_score, classification_report, balanced_accuracy_score
 
 
-# --- Visualization / Projection (UMAP with t-SNE fallback) ---
-try:
-    import umap
-    _HAS_UMAP = True
-except Exception:
-    _HAS_UMAP = False
-import matplotlib.pyplot as plt
-
 from constants import (
     DEVICE_MPS, DEVICE_CUDA, DEVICE_CPU, EPOCHS,
     DATA_ROOT, BATCH_SIZE, LR, SWA_LR,
@@ -233,13 +225,7 @@ if __name__ == '__main__':
             
             # Pass test_loader and DEVICE as arguments
             evaluate_model(model, test_loader, DEVICE, f"Best Model ({os.path.basename(model_path)})")
-            # --- UMAP projection of test-set embeddings (standard model) ---
-            try:
-                emb, y_true = collect_embeddings(model, test_loader, DEVICE)
-                umap_png = os.path.join(MODEL_SUBFOLDER, "umap_test_embeddings.png")
-                project_and_plot(emb, y_true, umap_png)
-            except Exception as e:
-                print(f"⚠️ Skipped UMAP/TSNE projection for standard model due to error: {e}")
+            
                 
         except Exception as e:
             print(f"❌ Error loading {model_path}: {e}")

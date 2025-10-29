@@ -7,55 +7,6 @@ Original file is located at
     https://colab.research.google.com/drive/13rE65-jYaDGdycBa34JeFZcoRF9qA8Ss
 """
 
-EPOCHS = 400
-DATA_ROOTs = "/content/data/AD_NC"
-BATCH_SIZE = 512
-LR = 1e-3
-WD = 0.05
-DROP_PATH_RATE = 0.1
-
-# 1. GẮN KẾT GOOGLE DRIVE
-# BƯỚC NÀY BẮT BUỘC để Colab thấy file trên Drive của bạn.
-from google.colab import drive
-drive.mount('/content/gdrive')
-
-# --- THAY ĐỔI ĐƯỜNG DẪN TẠI ĐÂY ---
-# Đổi tên và đường dẫn file zip project (Bây giờ là 'Pattern.zip')
-# LƯU Ý: Tên file trên Drive có phân biệt chữ hoa/thường. Chúng ta sẽ thử cả hai trường hợp.
-project_zip_path_caps = '/content/gdrive/MyDrive/Pattern248.zip'
-project_zip_path_lower = '/content/gdrive/MyDrive/pattern248.zip'
-# Đường dẫn file dữ liệu (Không thay đổi)
-data_zip_path = '/content/gdrive/MyDrive/AD_NC.zip'
-
-# 2. GIẢI NÉN MÃ NGUỒN VÀ MODEL (file Pattern.zip)
-# Giải nén vào thư mục hiện tại của Colab (/content/)
-# Sau khi giải nén, các file .ipynb, .py, .pth sẽ nằm trong /content/
-print("Giải nén mã nguồn và model...")
-
-# Thử giải nén với đường dẫn viết hoa (Pattern.zip)
-unzip_command = f'unzip -q "{project_zip_path_caps}" -d /content/'
-result = !{unzip_command}
-
-# Nếu lỗi 'cannot find', thử với đường dẫn viết thường (pattern.zip)
-if "cannot find" in str(result):
-    print("Không tìm thấy 'Pattern.zip'. Thử tìm 'pattern.zip'...")
-    unzip_command = f'unzip -q "{project_zip_path_lower}" -d /content/'
-    result = !{unzip_command}
-
-# 3. GIẢI NÉN DỮ LIỆU HÌNH ẢNH (file AD_NC.zip)
-# Việc này đã thành công, chỉ cần giữ nguyên
-print("Giải nén dữ liệu hình ảnh...")
-!unzip -q "{data_zip_path}" -d /content/data
-
-# XÓA THƯ MỤC KHÔNG CẦN THIẾT __MACOSX (nếu có)
-!rm -rf /content/data/__MACOSX
-
-# 4. KIỂM TRA FILE ĐÃ TỒN TẠI CHƯA
-print("Kiểm tra các file quan trọng:")
-# Kiểm tra file mã nguồn chính
-!ls /content/notetrain.ipynb
-# Kiểm tra thư mục dữ liệu đã được giải nén
-!ls /content/data/AD_NC
 
 import os
 import numpy as np
@@ -74,8 +25,9 @@ torch.backends.cudnn.deterministic = False
 
 from dataset import get_loaders
 from constants import (
-    DEVICE_MPS, DEVICE_CUDA, DEVICE_CPU,
-    DATA_ROOT,
+    DEVICE_MPS, DEVICE_CUDA, DEVICE_CPU, EPOCHS,
+    DATA_ROOT, BATCH_SIZE, LR, SWA_LR,
+    WD, DROP_PATH_RATE,
     NUM_CLASSES
 )
 # Device setup
@@ -85,8 +37,6 @@ elif torch.cuda.is_available():
     DEVICE = DEVICE_CUDA
 else:
     DEVICE = DEVICE_CPU
-
-!pip install torch-ema
 
 from sklearn.metrics import roc_auc_score
 import importlib, modules
@@ -98,13 +48,14 @@ print("Current working directory:", os.getcwd())
 print(f"Using device: {DEVICE}")
 
 # Load data
+# NOTE: We still load test_loader here because get_loaders returns 3 items,
+# but it will not be used in the training or evaluation loops.
 train_loader, val_loader, test_loader = get_loaders(
-    data_root  =  DATA_ROOTs,
+    data_root  =  DATA_ROOT,
     batch_size = BATCH_SIZE
 )
 print(f"Train images: {len(train_loader.dataset)} | "
-    f"Val images:   {len(val_loader.dataset)} | "
-    f"Test images:  {len(test_loader.dataset)}")
+    f"Val images:   {len(val_loader.dataset)}")
 # Model setup
 model = ConvNeXtMRI(
     in_chans=3,
@@ -134,8 +85,9 @@ scheduler = SequentialLR(optimizer, schedulers=[warmup, main_cosine], milestones
 
 # === SWA setup ===
 swa_start_epoch = int(EPOCHS * 0.8)  # last 20% of training
-swa_model = AveragedModel(model)
-swa_scheduler = SWALR(optimizer, swa_lr=1e-4)
+swa_model = AveragedModel(model) #
+swa_scheduler = SWALR(optimizer, swa_lr=SWA_LR) #
+
 
 # Schedule variables for augmentation + drop-path
 total_epochs = EPOCHS
@@ -200,13 +152,10 @@ def cutmix_data(x, y, alpha=1.0):
 
 # (Continue with training loop…)
 print("🔹 Training started ...")
-best_test_acc = -1.0           # global tracker
-best_test_acc_swa = -1.0       # track SWA separately
-use_swa_every = 1              # eval SWA each epoch in SWA phase
 
-best_val_acc = 0.0
-history = {'train_loss': [], 'val_loss': [], 'train_acc': [], 'val_acc': []}
-epochs = range(1, EPOCHS + 1)
+best_val_acc = 0.0 #
+history = {'train_loss': [], 'val_loss': [], 'train_acc': [], 'val_acc': []} #
+epochs = range(1, EPOCHS + 1) #
 
 lrs = []  # track learning rate per epoch
 
@@ -324,82 +273,6 @@ for epoch in range(1, EPOCHS + 1):
     print(f"Val Precision: {val_precision:.3f}, Recall: {val_recall:.3f}, F1: {val_f1:.3f}")
 
 
-
-    # === 🧪 Test Evaluation (EMA-aware) ===
-    from sklearn.metrics import roc_auc_score
-
-    model.eval()
-    all_probs, all_labels = [], []
-    test_correct, test_total = 0, 0
-    with torch.no_grad():
-        for inputs, labels in test_loader:
-            inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
-            outputs = model(inputs)
-            probs = torch.softmax(outputs, dim=1)[:, 1]
-            _, predicted = outputs.max(1)
-            test_total += labels.size(0)
-            test_correct += predicted.eq(labels).sum().item()
-            all_probs.extend(probs.cpu().numpy())
-            all_labels.extend(labels.cpu().numpy())
-
-    test_acc = 100 * test_correct / test_total
-    test_auc = roc_auc_score(all_labels, all_probs)
-    print(f"🧠 [TEST] Epoch {epoch}: Acc={test_acc:.2f}%, AUC={test_auc:.3f}")
-
-    # --- SWA evaluation & saving (only after swa_start_epoch)
-    if epoch >= swa_start_epoch and (epoch - swa_start_epoch) % use_swa_every == 0:
-        swa_model.eval()
-        swa_test_correct, swa_test_total = 0, 0
-        swa_probs_all, swa_labels_all = [], []
-        with torch.no_grad():
-            for inputs, labels in test_loader:
-                inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
-                outputs = swa_model(inputs)
-                probs = torch.softmax(outputs, dim=1)[:, 1]   # class-1 as positive
-                _, preds = outputs.max(1)
-                swa_test_total += labels.size(0)
-                swa_test_correct += preds.eq(labels).sum().item()
-                swa_probs_all.extend(probs.cpu().numpy())
-                swa_labels_all.extend(labels.cpu().numpy())
-
-        from sklearn.metrics import roc_auc_score
-        swa_test_acc = 100.0 * swa_test_correct / swa_test_total
-        swa_test_auc = roc_auc_score(swa_labels_all, swa_probs_all)
-        print(f"🧠 [TEST-SWA] Epoch {epoch}: Acc={swa_test_acc:.2f}%, AUC={swa_test_auc:.3f}")
-        with open('training_log_SWA.txt', 'a') as f:
-            f.write(f"[TEST] Epoch {epoch}: Acc={swa_test_acc:.2f}%, AUC={swa_test_auc:.3f}\n")
-
-        if swa_test_acc > best_test_acc_swa:
-            best_test_acc_swa = swa_test_acc
-            torch.save(swa_model.state_dict(), 'best_model_test_acc_swa.pth')
-            print("⭐ New best SWA test accuracy — saved 'best_model_test_acc_swa.pth'")
-
-    # Log results
-    with open('training_log.txt', 'a') as f:
-        f.write(f"[TEST] Epoch {epoch}: Acc={test_acc:.2f}%, AUC={test_auc:.3f}\n")
-
-    # === Track best test accuracy ===
-    if epoch == 1:
-        best_test_acc = test_acc  # initialize tracker
-    else:
-        try:
-            best_test_acc
-        except NameError:
-            best_test_acc = test_acc  # safety init if running standalone
-
-    # ✅ Save model if test accuracy improves
-    if test_acc > best_test_acc:
-        best_test_acc = test_acc
-        torch.save(model.state_dict(), 'best_model_test_acc.pth')
-        print(f"⭐ New best test accuracy: {test_acc:.2f}% — saved as 'best_model_test_acc.pth'")
-
-    # ✅ Optional: also save if passes the 0.8 threshold (as before)
-    if test_acc >= 80.0:
-        torch.save(model.state_dict(), 'best_model_pass_test.pth')
-        print(f"🏁 Test accuracy reached {test_acc:.2f}% — model saved as 'best_model_pass_test.pth'")
-        break
-
-
     # --- OPTIONAL: Validation threshold tuning ---
     if epoch % 5 == 0 or epoch == EPOCHS:
         all_val_probs, all_val_labels = [], []
@@ -431,8 +304,8 @@ for epoch in range(1, EPOCHS + 1):
 
     if val_acc > best_val_acc:
         best_val_acc = val_acc
-        torch.save(model.state_dict(), 'best_model.pth')
-        print(f'✅ New best model saved! (Val Acc: {val_acc:.2f}%)')
+        torch.save(model.state_dict(), 'best_model.pth') #
+        print(f'✅ New best model saved! (Val Acc: {val_acc:.2f}%)') #
 
     with open('training_log.txt', 'a') as f:
         f.write(f'Epoch {epoch}: Train Loss={train_loss:.4f}, Train Acc={train_acc:.2f}%, '
@@ -441,8 +314,8 @@ for epoch in range(1, EPOCHS + 1):
 
     # === Learning rate + SWA handling ===
     if epoch >= swa_start_epoch:
-        swa_model.update_parameters(model)
-        swa_scheduler.step()
+        swa_model.update_parameters(model) #
+        swa_scheduler.step() #
     else:
         scheduler.step()
 
@@ -450,9 +323,6 @@ for epoch in range(1, EPOCHS + 1):
     lrs.append(current_lr)
     print(f"Current LR after epoch {epoch}: {current_lr:.6f}")
 
-torch.save(swa_model.state_dict(), 'swa_final.pth')
-print(f"🏁 Final SWA best test accuracy: {best_test_acc_swa:.2f}%")
-print("💾 Saved final SWA weights to 'swa_final.pth'")
 
 """# Plot training curves"""
 
@@ -494,255 +364,11 @@ plt.savefig('lr_schedule.png', dpi=150)
 plt.show()
 print('📈 Learning rate schedule saved as lr_schedule.png')
 
-# === Load best model (prefer the test-pass version if available) ===
-if os.path.exists('best_model_test_acc.pth'):
-    model.load_state_dict(torch.load('best_model_test_acc.pth'))
-    print("✅ Loaded model: best_model_test_acc.pth")
-else:
-    model.load_state_dict(torch.load('best_model.pth'))
-    print("✅ Loaded model: best_model.pth (best validation model)")
 
-model.eval()
-test_correct, test_total = 0, 0
-with torch.no_grad():
-    for inputs, labels in test_loader:
-        inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
-        outputs = model(inputs)
-        _, predicted = outputs.max(1)
-        test_total += labels.size(0)
-        test_correct += predicted.eq(labels).sum().item()
-
-test_acc = 100 * test_correct / test_total
-print(f"🧠 Final Test Accuracy: {test_acc:.2f}%")
-
-num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-print(f"🧩 Model parameters: {num_params/1e6:.2f}M")
 
 # === Finalize SWA model ===
 print("🧮 Updating batch-norm statistics for SWA model...")
-update_bn(train_loader, swa_model, device=DEVICE)
-torch.save(swa_model.state_dict(), 'swa_model.pth')
-print("✅ SWA model saved as swa_model.pth")
+update_bn(train_loader, swa_model, device=DEVICE) #
+torch.save(swa_model.state_dict(), 'swa_model.pth') #
+print("✅ SWA model saved as swa_model.pth") #
 
-# Optionally evaluate SWA model
-swa_model.eval()
-print("🔍 Evaluating SWA model on test set...")
-all_probs, all_labels = [], []
-test_correct, test_total = 0, 0
-with torch.no_grad():
-    for inputs, labels in test_loader:
-        inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
-        outputs = swa_model(inputs)
-        probs = torch.softmax(outputs, dim=1)[:, 1]
-        preds = probs > 0.5
-        test_total += labels.size(0)
-        test_correct += preds.eq(labels).sum().item()
-        all_probs.extend(probs.cpu().numpy())
-        all_labels.extend(labels.cpu().numpy())
-
-from sklearn.metrics import roc_auc_score
-test_acc = 100 * test_correct / test_total
-test_auc = roc_auc_score(all_labels, all_probs)
-print(f"🧠 [SWA MODEL] Final Test Acc: {test_acc:.2f}%, AUC={test_auc:.3f}")
-
-# === ROC Curve and AUC Score ===
-from sklearn.metrics import roc_curve, auc
-import numpy as np
-import matplotlib.pyplot as plt
-
-print("\n📈 Generating ROC Curve...")
-
-# Compute predicted probabilities for the positive class (NC = 1) and collect labels
-all_probs = []
-all_labels = []  # Initialize all_labels list
-with torch.no_grad():
-    for inputs, labels in test_loader:  # Iterate through test_loader to get inputs and labels
-        inputs = inputs.to(DEVICE)
-        # labels = labels.to(DEVICE) # Labels don't need to be on the device for calculating ROC
-        outputs = model(inputs)
-        probs = torch.softmax(outputs, dim=1)[:, 1]  # Probability for class 1 (NC)
-        all_probs.extend(probs.cpu().numpy())
-        all_labels.extend(labels.cpu().numpy()) # Collect labels
-
-# Convert to numpy arrays
-all_probs = np.array(all_probs)
-all_labels = np.array(all_labels)
-
-# Compute ROC curve and AUC
-fpr, tpr, _ = roc_curve(all_labels, all_probs)
-roc_auc = auc(fpr, tpr)
-
-# Plot ROC Curve
-plt.figure()
-plt.plot(fpr, tpr, color='darkorange', lw=2,
-         label=f'ROC curve (AUC = {roc_auc:.3f})')
-plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
-plt.xlim([0.0, 1.0])
-plt.ylim([0.0, 1.05])
-plt.xlabel('False Positive Rate')
-plt.ylabel('True Positive Rate')
-plt.title('Receiver Operating Characteristic (ROC) Curve')
-plt.legend(loc='lower right')
-plt.savefig('roc_curve.png', dpi=150)
-plt.show()
-
-print(f"✅ ROC curve saved as roc_curve.png | AUC = {roc_auc:.3f}")
-
-# Optionally record the AUC value in your training log
-with open("training_log.txt", "a") as f:
-    f.write(f"AUC Score: {roc_auc:.4f}\n")
-
-from sklearn.metrics import roc_curve, classification_report, balanced_accuracy_score, f1_score
-import numpy as np
-import pandas as pd
-import torch
-
-print("\n📊 Generating detailed classification metrics...")
-
-# === Collect true labels and predicted probabilities ===
-all_labels = []
-all_scores = []   # probabilities for AD class
-
-model.eval()
-with torch.no_grad():
-    for inputs, labels in test_loader:
-        inputs = inputs.to(DEVICE)
-        outputs = model(inputs)
-        probs = torch.softmax(outputs, dim=1)[:, 1]  # probability of AD
-        all_scores.extend(probs.cpu().numpy())
-        all_labels.extend(labels.cpu().numpy())
-
-all_scores = np.array(all_scores)
-all_labels = np.array(all_labels)
-
-# === Find optimal threshold from ROC curve ===
-fpr, tpr, thresholds = roc_curve(all_labels, all_scores)
-best_idx = (tpr - fpr).argmax()
-best_thr = thresholds[best_idx]
-print(f"🔥 Optimal decision threshold: {best_thr:.3f}")
-
-# === Apply threshold ===
-all_preds = (all_scores > best_thr).astype(int)
-
-# === Evaluate using balanced metrics ===
-report = classification_report(
-    all_labels,
-    all_preds,
-    target_names=['AD', 'NC'],
-    output_dict=True
-)
-report_df = pd.DataFrame(report).transpose()
-
-balanced_acc = balanced_accuracy_score(all_labels, all_preds)
-macro_f1 = f1_score(all_labels, all_preds, average='macro')
-print(f"\nBalanced Accuracy: {balanced_acc:.4f}")
-print(f"Macro F1: {macro_f1:.4f}")
-print(report_df)
-
-# === Save to CSV for report inclusion ===
-report_df.to_csv('classification_report.csv', index=True)
-print("✅ Class-wise metrics saved as classification_report.csv")
-
-from sklearn.metrics import confusion_matrix
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-cm = confusion_matrix(all_labels, all_preds)
-sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
-            xticklabels=['AD', 'NC'], yticklabels=['AD', 'NC'])
-plt.title("Confusion Matrix")
-plt.xlabel("Predicted")
-plt.ylabel("True")
-plt.savefig("confusion_matrix.png", dpi=150)
-plt.show()
-print("✅ confusion_matrix.png saved successfully.")
-
-# === Balanced Example Predictions Visualization (4 AD + 4 NC) ===
-import random
-from PIL import Image
-from torchvision import transforms
-import matplotlib.pyplot as plt
-
-print("\n🧠 Generating balanced example predictions visualization...")
-
-# Separate AD and NC indices in test dataset
-ad_indices = [i for i, (_, label) in enumerate(test_loader.dataset.samples) if label == 0]
-nc_indices = [i for i, (_, label) in enumerate(test_loader.dataset.samples) if label == 1]
-
-# Randomly select 4 from each class
-sample_indices = random.sample(ad_indices, 4) + random.sample(nc_indices, 4)
-random.shuffle(sample_indices)
-
-plt.figure(figsize=(14, 6))
-for i, idx in enumerate(sample_indices):
-    img_path, true_label = test_loader.dataset.samples[idx]
-    img = Image.open(img_path).convert('RGB')
-
-    # Apply same preprocessing as training
-    preprocess = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize([0.5]*3, [0.5]*3)
-    ])
-    img_tensor = preprocess(img).unsqueeze(0).to(DEVICE)
-
-    # Predict
-    with torch.no_grad():
-        output = model(img_tensor)
-        pred = output.argmax(dim=1).item()
-
-    # Plot
-    plt.subplot(2, 4, i + 1)
-    plt.imshow(Image.open(img_path))
-    plt.title(f"True: {['AD','NC'][true_label]}\nPred: {['AD','NC'][pred]}")
-    plt.axis('off')
-
-plt.tight_layout()
-plt.savefig("example_predictions_balanced.png", dpi=150)
-plt.show()
-print("✅ Balanced example predictions saved as example_predictions_balanced.png")
-
-# === ✅ AUTOMATIC BACKUP TO GOOGLE DRIVE (no manual download needed) ===
-
-from google.colab import drive
-import shutil
-import os
-
-# 1️⃣ Mount Google Drive
-drive.mount('/content/drive')
-
-# 2️⃣ Choose where to save your results on Drive
-SAVE_DIR = '/content/drive/MyDrive/248_450epochs_3e-3'
-os.makedirs(SAVE_DIR, exist_ok=True)
-
-# 3️⃣ List all result files, including the new ones
-result_files = [
-    'best_model.pth',
-    'notetrain.ipynb',
-    'best_model_test_acc.pth',
-    'confusion_matrix.png',
-    'swa_model.pth',
-    'lr_schedule.png',
-    'training_curves.png',
-    'training_history.csv',
-    'training_log.txt',
-    'roc_curve.png',                   # ✅ NEW
-    'classification_report.csv',       # ✅ NEW
-    'example_predictions.png',         # ✅ Optional (if you add the visualization)
-    'results_backup.zip'               # Optional archive
-]
-
-# 4️⃣ Copy each file to Drive if it exists
-for file in result_files:
-    if os.path.exists(file):
-        dest_path = os.path.join(SAVE_DIR, os.path.basename(file))
-        shutil.copy(file, dest_path)
-        print(f"✅ Saved to Drive: {dest_path}")
-    else:
-        print(f"⚠️ File not found: {file}")
-
-print("\n📦 All result files have been backed up to Google Drive successfully!")
-print(f"📂 Drive folder: {SAVE_DIR}")
-
-from google.colab import runtime
-runtime.unassign()
