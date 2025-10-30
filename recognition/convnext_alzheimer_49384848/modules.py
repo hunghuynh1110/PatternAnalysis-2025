@@ -35,7 +35,6 @@ def drop_path(x, drop_prob: float = 0., training: bool = False):
     random_tensor.floor_()  # binarize
     return x.div(keep_prob) * random_tensor
 
-
 class DropPath(nn.Module):
     def __init__(self, drop_prob: float = 0.):
         super().__init__()
@@ -196,12 +195,6 @@ class ConvNeXtMRI(nn.Module):
         for m in self.modules():
             if hasattr(m, 'drop_path_rate'):
                 m.drop_path_rate = rate
-        
-        
-        
-        
-        
-        
         
 
 if __name__ == "__main__":

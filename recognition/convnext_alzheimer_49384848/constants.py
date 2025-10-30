@@ -1,3 +1,11 @@
+"""
+predict.py
+Author: Gia Hung Huynh — 49384848
+Date: 20 Oct 2025
+
+Purpose: 
+    Store constants for global access
+"""
 # constants.py
 
 DATA_ROOT = "./AD_NC"
@@ -25,4 +33,4 @@ WD         = 0.05
 
 
 NUM_CLASSES   = 2
-DROP_PATH_RATE = 0.1  # for example, maybe 0.1 for tiny model
+DROP_PATH_RATE = 0.1

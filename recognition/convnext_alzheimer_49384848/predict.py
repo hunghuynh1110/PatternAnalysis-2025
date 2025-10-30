@@ -2,7 +2,7 @@
 """
 predict.py
 Author: Gia Hung Huynh — 49384848
-Date: 30 Oct 2025
+Date: 23 Oct 2025
 
 Purpose
 -------
@@ -180,5 +180,3 @@ if __name__ == '__main__':
         print(f"⚠️ File not found: {swa_model_path}. Skipping SWA model test.")
 
     print("\n--- Evaluation Complete ---")
-
-    # (Removed the google.colab lines that would crash here)
