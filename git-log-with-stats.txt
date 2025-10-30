@@ -1,0 +1,622 @@
+commit 8539395a3ffd31eb8422eafb6f08733ebd029506
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Thu Oct 30 13:27:09 2025 +1000
+
+    Change header of predict.py
+
+ recognition/convnext_alzheimer_49384848/predict.py | 29 ----------------------
+ 1 file changed, 29 deletions(-)
+
+commit b82a376d1520cfa16fd56e441ec8db35be8e4c72
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Thu Oct 30 01:22:32 2025 +1000
+
+    Update train model readme
+
+ recognition/convnext_alzheimer_49384848/README.md | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+commit 0beb19ac934800a973f2a328d3c06707560cad39
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Thu Oct 30 01:16:40 2025 +1000
+
+    Update requirements and reference correctly
+
+ recognition/convnext_alzheimer_49384848/README.md  | 40 ++++++++++++----------
+ .../convnext_alzheimer_49384848/requirements.txt   | 11 ++++++
+ 2 files changed, 32 insertions(+), 19 deletions(-)
+
+commit 665f582a67db85a9f70daae0be409555e7e4a831
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Thu Oct 30 00:56:30 2025 +1000
+
+    Move functions helper to utils
+
+ .../notebooks_dev/01_dataset.ipynb                 | 199 ---------------------
+ .../notebooks_dev/02_train_convnext.ipynb          |   0
+ .../notebooks_dev/03_evaluate_metric.ipynb         |   0
+ recognition/convnext_alzheimer_49384848/predict.py | 141 +++++----------
+ recognition/convnext_alzheimer_49384848/train.py   |  52 +-----
+ recognition/convnext_alzheimer_49384848/utils.py   |  55 ++++++
+ 6 files changed, 105 insertions(+), 342 deletions(-)
+
+commit 0ebc08b79c546e44648ed387e1fd08e323fd20c5
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Thu Oct 30 00:33:34 2025 +1000
+
+    Add dataset download link
+
+ recognition/convnext_alzheimer_49384848/README.md | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+commit 0f2ad3da3a89bd5ed35e617c7277e5174630b962
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Thu Oct 30 00:32:02 2025 +1000
+
+    Add requirements and add headers
+
+ recognition/convnext_alzheimer_49384848/README.md  | 193 +++++++--------------
+ recognition/convnext_alzheimer_49384848/modules.py |  20 +++
+ .../convnext_alzheimer_49384848/requirements.txt   |   0
+ recognition/convnext_alzheimer_49384848/train.py   |  15 +-
+ 4 files changed, 93 insertions(+), 135 deletions(-)
+
+commit 29bf095435d7728be0c0d0e890c5a6f3cbb7de49
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Thu Oct 30 00:13:17 2025 +1000
+
+    Update ReadMe and predict.py to print out test acc, fix data root issue
+
+ .../Images/Report/ConvNeXt-structure.webp          | Bin 0 -> 22562 bytes
+ .../convnext_alzheimer_49384848/constants.py       |  18 +-
+ recognition/convnext_alzheimer_49384848/dataset.py |  10 +-
+ recognition/convnext_alzheimer_49384848/modules.py |   2 -
+ recognition/convnext_alzheimer_49384848/predict.py |  16 +-
+ recognition/convnext_alzheimer_49384848/train.py   | 414 +--------------------
+ 6 files changed, 39 insertions(+), 421 deletions(-)
+
+commit 7f9145d711bdbb5803aba95f41620468510bc734
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Wed Oct 29 22:42:13 2025 +1000
+
+    Working predict.py
+
+ recognition/convnext_alzheimer_49384848/predict.py | 132 ++++++++++++++++++---
+ 1 file changed, 118 insertions(+), 14 deletions(-)
+
+commit 8bf2d896c498a18a45be0f7721bb63d40db254b1
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Wed Oct 29 22:01:56 2025 +1000
+
+    Update ReadMe, finish half of it
+
+ .../Report}/classification_report.csv              |   0
+ .../{Data => Images/Report}/training_history.csv   |   0
+ .../{Data => Images/Report}/training_log.txt       |   0
+ recognition/convnext_alzheimer_49384848/README.md  | 304 +++++++++++++++++----
+ 4 files changed, 252 insertions(+), 52 deletions(-)
+
+commit 4f520118c3c2d681ce61081222625e74966f2e04
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Fri Oct 24 14:53:07 2025 +1000
+
+    update DATA_ROOT
+    implement predict.py
+
+ .../convnext_alzheimer_49384848/constants.py       |   4 +-
+ recognition/convnext_alzheimer_49384848/predict.py | 166 +++++++++++++++++++++
+ 2 files changed, 169 insertions(+), 1 deletion(-)
+
+commit 29152a4a067e629107fa99e84de58b4b919d591b
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Thu Oct 23 13:43:30 2025 +1000
+
+    0.8 acc test result
+
+ .../Data/classification_report.csv                 |   6 +
+ .../Data/training_history.csv                      | 401 ++++++++++
+ .../Data/training_log.txt                          | 817 +++++++++++++++++++++
+ 3 files changed, 1224 insertions(+)
+
+commit 6a79fad3236b04615f0d78311d46322b4df69293
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Thu Oct 23 13:41:23 2025 +1000
+
+    achieve 80 test acc. Need refine for submission
+
+ recognition/convnext_alzheimer_49384848/train.py | 51 ++++++++++++++++++++----
+ 1 file changed, 44 insertions(+), 7 deletions(-)
+
+commit fe5e88baf7e3b86f899b37787e5296887daf6a1f
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Thu Oct 23 13:40:24 2025 +1000
+
+    switch back to 248 resolution
+
+ recognition/convnext_alzheimer_49384848/constants.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit 25b5303a29910468049fabfd222e32be8463d27f
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Thu Oct 23 01:53:26 2025 +1000
+
+    Use 384 resolution
+
+ .../convnext_alzheimer_49384848/constants.py       |  2 +-
+ recognition/convnext_alzheimer_49384848/dataset.py | 31 +++++++++++++---------
+ 2 files changed, 20 insertions(+), 13 deletions(-)
+
+commit e321322095b98173b00cabc7fe921cdb1a8e17ba
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Wed Oct 22 21:33:53 2025 +1000
+
+    Add warmup again
+
+ recognition/convnext_alzheimer_49384848/train.py | 29 ++++++++++++++++--------
+ 1 file changed, 19 insertions(+), 10 deletions(-)
+
+commit 3d10537e058929a0c69285c16e11596c33bc41a1
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Wed Oct 22 21:33:16 2025 +1000
+
+    remove some randUagment
+
+ recognition/convnext_alzheimer_49384848/dataset.py | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+commit 525b4426b48d4440b418279e251dcf99b36cda2f
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Wed Oct 22 16:55:11 2025 +1000
+
+    training reach 78% test acc.
+
+ recognition/convnext_alzheimer_49384848/dataset.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit c8547e069fdffc567f44b8294e72c56c6d9b27ac
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Wed Oct 22 16:02:43 2025 +1000
+
+    Add SWA and test different LR
+
+ recognition/convnext_alzheimer_49384848/train.py | 80 +++++++++++++++++++-----
+ 1 file changed, 63 insertions(+), 17 deletions(-)
+
+commit 5ba7b01397b28fbd71fb84de7269b2733569abed
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Wed Oct 22 14:50:22 2025 +1000
+
+    add set droppath
+
+ recognition/convnext_alzheimer_49384848/modules.py | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+commit c095c73311863d56a0dce03fa28b56205afb753c
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Wed Oct 22 14:50:10 2025 +1000
+
+    adjust randAugment to 9 5
+
+ recognition/convnext_alzheimer_49384848/dataset.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit 98a7d3ba20d1f2c0a04bf4c9232160e742d501e1
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Wed Oct 22 02:00:41 2025 +1000
+
+    Add scheduling logic for MixUp,CutMix, droppathrate probability and strength -> longer exploration phase
+
+ recognition/convnext_alzheimer_49384848/train.py | 49 ++++++++++++++++--------
+ 1 file changed, 34 insertions(+), 15 deletions(-)
+
+commit ba8792915e57faeb5666dc5f77c5325d4fe56f08
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Wed Oct 22 01:23:20 2025 +1000
+
+    remove EMA, freeze layers
+    tune LR, WD, Drop. Peak 76t 86v
+
+ .../convnext_alzheimer_49384848/constants.py       |   2 +-
+ recognition/convnext_alzheimer_49384848/train.py   | 163 +++++++++------------
+ 2 files changed, 69 insertions(+), 96 deletions(-)
+
+commit b1da120975b8c5eca410d3a427c95d738df31359
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Tue Oct 21 18:54:21 2025 +1000
+
+    enable EMA
+
+ .../convnext_alzheimer_49384848/constants.py       |  6 ++--
+ recognition/convnext_alzheimer_49384848/train.py   | 34 +++++-----------------
+ 2 files changed, 11 insertions(+), 29 deletions(-)
+
+commit 23a7032c0d84ef95ba7fdcb512e91a3641197f31
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Tue Oct 21 18:45:31 2025 +1000
+
+    change LR, batch size
+
+ recognition/convnext_alzheimer_49384848/constants.py | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+commit 188bfad314f4bbe30233f08896a705baffbdc8e0
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Tue Oct 21 18:45:19 2025 +1000
+
+    remove LN
+
+ recognition/convnext_alzheimer_49384848/modules.py | 99 ++++++----------------
+ 1 file changed, 27 insertions(+), 72 deletions(-)
+
+commit 261c6b091b17f7c63f07520beecc100735e7f2f0
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Tue Oct 21 17:02:10 2025 +1000
+
+    change depths, dims, lr, droppathrate
+
+ recognition/convnext_alzheimer_49384848/constants.py | 4 +++-
+ recognition/convnext_alzheimer_49384848/dataset.py   | 2 +-
+ recognition/convnext_alzheimer_49384848/train.py     | 6 ++++--
+ 3 files changed, 8 insertions(+), 4 deletions(-)
+
+commit 1b684aa33b7c9d45b38b9b55e9f7ec1ce836f27f
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Tue Oct 21 15:13:23 2025 +1000
+
+    add RandAugment
+
+ recognition/convnext_alzheimer_49384848/dataset.py | 15 ++++++++-------
+ 1 file changed, 8 insertions(+), 7 deletions(-)
+
+commit b4466c2d3034a5c0f3b668424b95c07f3dbdfa73
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Tue Oct 21 15:07:06 2025 +1000
+
+    change scheduler, add CutMix
+
+ recognition/convnext_alzheimer_49384848/train.py | 82 ++++++++++++++++++++----
+ 1 file changed, 71 insertions(+), 11 deletions(-)
+
+commit 9eb590f9e781685849c34077741b479fdafe498c
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Tue Oct 21 13:47:36 2025 +1000
+
+    Clean dataset ordering
+    added perimageZscore normalization -> expect +5%
+    fix transform leakage
+
+ recognition/convnext_alzheimer_49384848/dataset.py | 98 +++++++++++++---------
+ 1 file changed, 57 insertions(+), 41 deletions(-)
+
+commit a9a027cbb74228a87a9f3d760200c05c82ba6acd
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Tue Oct 21 01:28:28 2025 +1000
+
+    Test Ema
+
+ recognition/convnext_alzheimer_49384848/train.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+commit 0987011458041bc8af334de1373f36371d9b0caa
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Tue Oct 21 00:44:39 2025 +1000
+
+    add EMA weights, expect +1/2% acc
+
+ recognition/convnext_alzheimer_49384848/train.py | 112 +++++++++++++++--------
+ 1 file changed, 74 insertions(+), 38 deletions(-)
+
+commit 28a75dcb08d14c3c5bc271f53dc628ff6b444170
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Tue Oct 21 00:40:25 2025 +1000
+
+    change mixup alpha to 0.1
+
+ recognition/convnext_alzheimer_49384848/train.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit 5ef62bba9ef474fc9a27dbc3a80b67ef8e3df70a
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Mon Oct 20 23:34:59 2025 +1000
+
+    implement MixUp
+
+ recognition/convnext_alzheimer_49384848/train.py | 26 +++++++++++++++++++++---
+ 1 file changed, 23 insertions(+), 3 deletions(-)
+
+commit 179f321c268701a28be37a28a5a5e746a6a2f69e
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Mon Oct 20 23:21:47 2025 +1000
+
+    apply freeze layers
+
+ recognition/convnext_alzheimer_49384848/train.py | 65 ++++++++++++++++--------
+ 1 file changed, 45 insertions(+), 20 deletions(-)
+
+commit 0c6d21a5c6de6b36e94991cee03ef132e8cfe3d2
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Mon Oct 20 23:21:06 2025 +1000
+
+    add freeze_stages
+
+ recognition/convnext_alzheimer_49384848/modules.py | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+commit 5e9f460c464edb0961a1e65ad67368530dda202a
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Mon Oct 20 23:02:44 2025 +1000
+
+    tweak learning rate
+
+ .../convnext_alzheimer_49384848/constants.py       |  6 +--
+ recognition/convnext_alzheimer_49384848/train.py   | 53 ++++++++--------------
+ 2 files changed, 22 insertions(+), 37 deletions(-)
+
+commit 8d257adc9036fd94135256bf2b887348e56449bc
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Mon Oct 20 22:10:16 2025 +1000
+
+    adapt pretrained weights for better acc.
+    need testing
+
+ recognition/convnext_alzheimer_49384848/train.py | 44 ++++++++++++++++++------
+ 1 file changed, 33 insertions(+), 11 deletions(-)
+
+commit b2d0756436521943774b1525b0573d7911ab4bdf
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Mon Oct 20 21:10:55 2025 +1000
+
+    add transform to train_tf
+
+ recognition/convnext_alzheimer_49384848/dataset.py | 17 ++++++++++++++---
+ 1 file changed, 14 insertions(+), 3 deletions(-)
+
+commit 0eaa9adc5246014b3c8cc3a877cbf2b5a53b97b8
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Mon Oct 20 21:10:38 2025 +1000
+
+    change depths and dims
+
+ recognition/convnext_alzheimer_49384848/constants.py | 13 +++++++------
+ recognition/convnext_alzheimer_49384848/modules.py   |  6 +++---
+ 2 files changed, 10 insertions(+), 9 deletions(-)
+
+commit 8d5ae685be22528ccc04280e5a14ea40a34a7d45
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Mon Oct 20 21:06:02 2025 +1000
+
+    add dropout layer and change drop_path_rate to 0.25
+
+ recognition/convnext_alzheimer_49384848/modules.py | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+commit 67594d7f3e45b6fd6b7be17c153118bbe6e61b8c
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Mon Oct 20 20:18:13 2025 +1000
+
+    call model with LN
+
+ recognition/convnext_alzheimer_49384848/train.py | 54 +++++++++++++++++++++---
+ 1 file changed, 48 insertions(+), 6 deletions(-)
+
+commit 0a48a2db74c08656e9a59dcb66e4bfe09aa44142
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Mon Oct 20 20:17:43 2025 +1000
+
+    find suitable STD and MEAN
+
+ recognition/convnext_alzheimer_49384848/dataset.py | 79 +++++++++++++++++++---
+ 1 file changed, 68 insertions(+), 11 deletions(-)
+
+commit 1c23a071dcc34ad0f704043cac1789b63faebc49
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Mon Oct 20 17:59:53 2025 +1000
+
+    ConvNeXtBlock now accepts both LN and BN
+
+ recognition/convnext_alzheimer_49384848/modules.py | 183 +++++++++++++--------
+ 1 file changed, 111 insertions(+), 72 deletions(-)
+
+commit 7a6bdff87aace451ead53f2cec7ab796a31814f9
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Mon Oct 20 16:03:16 2025 +1000
+
+    implement ConvNeXtMRI:
+    -convert image to tokens
+    -early spatial extraction
+    -Mid-level semantics
+    -High-level structure
+    -Global feature endcoding
+    -Global Pool+Linear
+
+ recognition/convnext_alzheimer_49384848/modules.py | 74 ++++++++++++++++++++--
+ 1 file changed, 70 insertions(+), 4 deletions(-)
+
+commit aef21e887ad6e3e052d850ace85fcbdcd26c8256
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Mon Oct 20 15:15:54 2025 +1000
+
+    update README model architecture
+
+ recognition/convnext_alzheimer_49384848/README.md | 103 +++++++++++++++++++++-
+ 1 file changed, 100 insertions(+), 3 deletions(-)
+
+commit f50496847b607ce8a711ba391025f1f52007a0d4
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Mon Oct 20 15:12:28 2025 +1000
+
+    Implement ConvNeXt and stack several ConvNextBlocks to create a astage with a downsampling layer at start
+    
+    This will replace the predesigned model in train.py
+
+ recognition/convnext_alzheimer_49384848/modules.py | 114 +++++++++++++++++++++
+ 1 file changed, 114 insertions(+)
+
+commit 266e75d2df71817c3afee896e31042027227021b
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Mon Oct 20 04:08:16 2025 +1000
+
+    added warmup LR, cleanup mixed precision API, Integrated optional threshold-tuning block
+
+ recognition/convnext_alzheimer_49384848/train.py | 589 +++++++++++++++++------
+ 1 file changed, 455 insertions(+), 134 deletions(-)
+
+commit 4213b10736f0af3a72b4b9c16a2560c1ea86bc3d
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Sun Oct 19 22:04:13 2025 +1000
+
+    Enable GPU optimization flags , log LR every epochs
+
+ .../convnext_alzheimer_49384848/constants.py       |  2 +-
+ recognition/convnext_alzheimer_49384848/dataset.py |  4 ++-
+ recognition/convnext_alzheimer_49384848/train.py   | 36 +++++++++++++++++++---
+ 3 files changed, 36 insertions(+), 6 deletions(-)
+
+commit 186d77b4c86242bab3ead16a10fe6f0a87128693
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Sun Oct 19 20:31:28 2025 +1000
+
+    add store best model and plot training_curves
+
+ recognition/convnext_alzheimer_49384848/train.py | 31 ++++++------------------
+ 1 file changed, 7 insertions(+), 24 deletions(-)
+
+commit 8be3baa50e4546222e468194d7a13eae84625f67
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Sun Oct 19 19:36:20 2025 +1000
+
+    add plot training curves
+
+ recognition/convnext_alzheimer_49384848/dataset.py |   2 +-
+ recognition/convnext_alzheimer_49384848/train.py   | 204 +++++++++++++--------
+ 2 files changed, 130 insertions(+), 76 deletions(-)
+
+commit 0a8c063e63fceeba4d9c76ce9b76872062c762be
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Sun Oct 19 18:02:33 2025 +1000
+
+    Add Data and Pro-processing documentation
+
+ recognition/convnext_alzheimer_49384848/README.md  | 71 +++++++++++++++++++++-
+ .../convnext_alzheimer_49384848/constants.py       |  3 +
+ recognition/convnext_alzheimer_49384848/dataset.py | 14 ++---
+ 3 files changed, 80 insertions(+), 8 deletions(-)
+
+commit cf96222d622bd1e751c9c309ff918e44348158c6
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Sun Oct 19 17:05:31 2025 +1000
+
+    Modify relative data_root path and add the training
+
+ .../convnext_alzheimer_49384848/constants.py       |   2 +-
+ recognition/convnext_alzheimer_49384848/train.py   | 104 +++++++++++++++++++++
+ 2 files changed, 105 insertions(+), 1 deletion(-)
+
+commit 369dd5e89d1e63cc13e774377b27f6aa04e76202
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Sun Oct 19 16:57:56 2025 +1000
+
+    Add constants file for global access and modify dataset.py
+
+ .../convnext_alzheimer_49384848/constants.py        | 20 ++++++++++++++++++++
+ recognition/convnext_alzheimer_49384848/dataset.py  | 21 ++++++++++-----------
+ 2 files changed, 30 insertions(+), 11 deletions(-)
+
+commit be06aa56cdc1d62297a1305d18adec4ce0750d10
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Sun Oct 19 16:31:57 2025 +1000
+
+    Use another normalize numbers
+
+ recognition/convnext_alzheimer_49384848/dataset.py | 156 ++++++++++++---------
+ 1 file changed, 88 insertions(+), 68 deletions(-)
+
+commit d5cd736f26713ca54ad1cb97191eb10794b7c8ed
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Sat Oct 18 18:16:29 2025 +1000
+
+    Convert .ipynb to .py and change the DATA_ROOT accordingly
+
+ recognition/convnext_alzheimer_49384848/dataset.py | 102 +++++++++++++++++++++
+ .../notebooks_dev/01_dataset.ipynb                 |  41 +++++++++
+ 2 files changed, 143 insertions(+)
+
+commit c01c1ed103be8e8c17fe03ee0d95b02cdf477303
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Sat Oct 18 18:07:34 2025 +1000
+
+    Notebook: implement data loader -> convert to .py later
+
+ .../notebooks_dev/01_dataset.ipynb                 | 158 +++++++++++++++++++++
+ 1 file changed, 158 insertions(+)
+
+commit 4590d8e9eab0f025ee781452fc87e38f517da504
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Sat Oct 18 17:48:53 2025 +1000
+
+    Created base tructure of Readme file for report and add .gitignore
+
+ .gitignore                                        | 30 +++++++++++++++++
+ recognition/convnext_alzheimer_49384848/README.md | 39 +++++++++++++++++++++++
+ 2 files changed, 69 insertions(+)
+
+commit 0c48e0e8a7fa67580ed70cbcf888094be987c5d3
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Thu Oct 16 21:51:14 2025 +1000
+
+    Add basic structure of project
+
+ recognition/convnext_alzheimer_49384848/dataset.py | 0
+ recognition/convnext_alzheimer_49384848/modules.py | 0
+ recognition/convnext_alzheimer_49384848/predict.py | 0
+ recognition/convnext_alzheimer_49384848/train.py   | 0
+ recognition/convnext_alzheimer_49384848/utils.py   | 0
+ 5 files changed, 0 insertions(+), 0 deletions(-)
+
+commit 416f0401153b972ce59fc3c1b496f8651e191fb4
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Thu Oct 16 21:50:57 2025 +1000
+
+    create jupiter notebook files to work on. will convert to .py later
+
+ recognition/convnext_alzheimer_49384848/notebooks_dev/01_dataset.ipynb    | 0
+ .../convnext_alzheimer_49384848/notebooks_dev/02_train_convnext.ipynb     | 0
+ .../convnext_alzheimer_49384848/notebooks_dev/03_evaluate_metric.ipynb    | 0
+ 3 files changed, 0 insertions(+), 0 deletions(-)
+
+commit 36856f880505f3d77047e5edd1f8d52f08543376
+Author: 1110giahung <144457830+1110giahung@users.noreply.github.com>
+Date:   Thu Oct 16 21:43:39 2025 +1000
+
+    Initial project folder and README created
+
+ recognition/convnext_alzheimer_49384848/README.md | 1 +
+ 1 file changed, 1 insertion(+)
+
+commit fe94a07ac79b46cab285ed0af66e21a7a7961600
+Author: Shekhar S. Chandra <shekhar.chandra@uq.edu.au>
+Date:   Mon Sep 22 09:19:02 2025 +1000
+
+    Added recognition branch for tasks
+
+ recognition/README.md | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+commit e5f50ae0f6af1631706e8d20987639df7a81eeac
+Author: Shekhar S. Chandra <shekhar.chandra@uq.edu.au>
+Date:   Mon Sep 22 09:18:06 2025 +1000
+
+    Updated text in README
+
+ README.md | 22 ++++++++++++++++++++--
+ 1 file changed, 20 insertions(+), 2 deletions(-)
+
+commit 798954e00bf8eb7ebb69de978b570ad3ebeacd7f
+Author: Shakes <shakes76@users.noreply.github.com>
+Date:   Sun Sep 21 12:50:09 2025 +1000
+
+    Initial commit
+
+ LICENSE   | 201 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ README.md |   2 +
+ 2 files changed, 203 insertions(+)
