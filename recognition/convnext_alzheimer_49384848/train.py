@@ -32,6 +32,22 @@ from constants import (
     WD, DROP_PATH_RATE,
     NUM_CLASSES
 )
+
+import os
+
+# === Early Stopping config ===
+EARLY_STOP = True
+early_patience = 10       # stop if no improvement for N epochs
+early_min_delta = 0.0     # required improvement amount
+monitor_metric = "val_loss"  # "val_loss" (minimize) or "val_acc" (maximize)
+
+# Internal trackers (no need to touch)
+_no_improve_epochs = 0
+if monitor_metric == "val_loss":
+    _best_monitored = float("inf")  # lower is better
+else:
+    _best_monitored = float("-inf") # higher is better
+
 # Device setup
 if torch.backends.mps.is_available():
     DEVICE = DEVICE_MPS
@@ -274,6 +290,29 @@ for epoch in range(1, EPOCHS + 1):
     current_lr = optimizer.param_groups[0]['lr']
     lrs.append(current_lr)
     print(f"Current LR after epoch {epoch}: {current_lr:.6f}")
+    
+    # === Early Stopping check (place at end of epoch) ===
+    if EARLY_STOP:
+        current = val_loss if monitor_metric == "val_loss" else val_acc
+
+        improved = (
+            (monitor_metric == "val_loss" and ( _best_monitored - current ) > early_min_delta) or
+            (monitor_metric == "val_acc"  and ( current - _best_monitored ) > early_min_delta)
+        )
+
+        if improved:
+            _best_monitored = current
+            _no_improve_epochs = 0
+        else:
+            _no_improve_epochs += 1
+            print(f"⏳ No {monitor_metric} improvement for {_no_improve_epochs}/{early_patience} epoch(s).")
+            if _no_improve_epochs >= early_patience:
+                print(f"⏹️ Early stopping at epoch {epoch} "
+                    f"(no {monitor_metric} improvement ≥ {early_min_delta} for {early_patience} epochs).")
+                # (Optional) log it
+                with open('training_log.txt', 'a') as f:
+                    f.write(f'EARLY STOP at epoch {epoch} on {monitor_metric}\n')
+                break
 
 
 
