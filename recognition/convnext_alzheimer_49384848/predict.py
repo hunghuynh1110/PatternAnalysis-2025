@@ -19,35 +19,6 @@ What this script does
 - (Helpers included): functions to collect penultimate-layer embeddings and
   project them (UMAP with t-SNE fallback), but these helpers are **not called** by default.
 
-Paths & assumptions
--------------------
-- DATA_ROOT is taken from `constants.py` (note: the later `from constants import DATA_ROOT`
-  overrides any earlier assignment in this file). Ensure that:
-    ./AD_NC/
-      ├── train/{AD,NC}
-      └── test/{AD,NC}
-- Checkpoints are expected in the current working directory as:
-    - ./best_model.pth           (required for standard eval)
-    - ./swa_model.pth            (optional)
-
-How to run
-----------
-From the repository root:
-    python recognition/convnext_alzheimer_49384848/predict.py
-
-If you run from another directory, ensure relative paths still resolve
-(or adjust DATA_ROOT/checkpoint paths accordingly).
-
-Dependencies
-------------
-- Required: torch, scikit-learn
-- Optional (only if you call the projection helpers): umap-learn, matplotlib
-
-Notes
------
-- The model uses BatchNorm (2D/1D) throughout (not LayerNorm).
-- If you evaluate an SWA checkpoint, remember BN stats should match the training
-  data distribution (use `update_bn` during training when creating SWA weights).
 """
 
 # --- IMPORTS (Remain at top level) ---
