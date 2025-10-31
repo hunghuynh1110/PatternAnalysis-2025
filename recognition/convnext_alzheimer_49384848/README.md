@@ -238,21 +238,35 @@ To evaluate the model's performance on unseen data, the test set was used. The m
 Table 3. Classification Report
 
 
-The confusion matrix for test results is shown in [Figure 4](#confusion-matrix). The results demonstate that ConvNeXt can effectively distinguish between AD and NC brain MRIs.
+Learning rate performs as expected: warmup in the first 5 epochs than slowly decay and remain stable at the last 20% as shown in [Figure 4](#learning-rate)
+
+<a id="learning-rate"></a>
+
+![Learning Rate](Images/Report/lr_schedule.png)
+Figure 4. Learning Rate schedule
+
+ROC curves is shown in [Figure 5](#roc-curve)
+
+<a id="ROC curve"></a>
+
+![roc-curve](Images/Report/roc_curve.png)
+Figure 5. ROC curve
+
+The confusion matrix for test results is shown in [Figure 6](#confusion-matrix). The results demonstate that ConvNeXt can effectively distinguish between AD and NC brain MRIs.
 
 <a id="confusion-matrix"></a>
 
 ![Confusion Matrix](Images/Report/confusion_matrix.png)
 
-Figure 4. Test Set Confusion Matrix
+Figure 6. Test Set Confusion Matrix
 
-The UMAP visualization in [Figure 5](#umap) shows separation between AD and NC embeddings. Even though the NC cluster is not as compact as AD, there are less overlaps of NC in AD than AD in NC. Indicating the model learned NC better.
+The UMAP visualization in [Figure 7](#umap) shows separation between AD and NC embeddings. Even though the NC cluster is not as compact as AD, there are less overlaps of NC in AD than AD in NC. Indicating the model learned NC better.
 
 <a id="umap"></a>
 
 ![UMAP](images/report/umap_test_embeddings.png)
 
-Figure 5. UMAP projection of test set feature embeddings.
+Figure 7. UMAP projection of test set feature embeddings.
 
 These results show that the model performs well overall, with particularly strong recall suggesting a good sensitiviy in detecting positive cases.
 
