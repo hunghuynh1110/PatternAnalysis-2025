@@ -176,7 +176,7 @@ This split ensures that the model’s generalisation is evaluated on entirely un
 
 #### Stochastic Weight Averaging (SWA)
 
-We adopt **Stochastic Weight Averaging (SWA)** in the final phase of training to improve generalization. SWA maintains a running average of model weights sampled near the end of training (here: starting at **80%** of epochs) and evaluates the averaged model at test time. This simple change nudges the solution toward a **wider/flatter optimum**, which is linked to better out-of-distribution robustness and smoother loss/accuracy curves [[9]](#swa-izmailov), [[11]](#swa-blog). In our PyTorch implementation we use `torch.optim.swa_utils.AveragedModel` and perform a one-pass **BatchNorm statistics update** with `torch.optim.swa_utils.update_bn(train_loader, swa_model)` before saving/evaluating the SWA weights [[10]](#swa-averagedmodel).
+I adopted Stochastic Weight Averaging (SWA) in the final phase of training to improve generalization. SWA maintains a running average of model weights sampled near the end of training (here: starting at 80% of epochs) and evaluates the averaged model at test time. This simple change nudges the solution toward a wider/flatter optimum, which is linked to better out-of-distribution robustness and smoother loss/accuracy curves [[9]](#swa-izmailov), [[11]](#swa-blog). In our PyTorch implementation we use `torch.optim.swa_utils.AveragedModel` and perform a one-pass BatchNorm statistics update with `torch.optim.swa_utils.update_bn(train_loader, swa_model)` before saving/evaluating the SWA weights [[10]](#swa-averagedmodel).
 
 ### Early stopping
 
